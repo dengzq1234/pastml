@@ -526,7 +526,7 @@ def pastml_pipeline(tree, data=None, data_sep='\t', id_index=0,
         _validate_input(tree, columns, name_column if html_compressed or html_mixed else None, data, data_sep, id_index,
                         root_date if html_compressed or html or html_mixed or upload_to_itol else None,
                         copy_only=copy_only, parameters=parameters, rates=rate_matrix)
-    print(roots[0].write(format_root_node=True, format=3, features=['date', 'date_CI', 'Country']))
+    print(roots[0].write(format_root_node=True, parser=3, props=['date', 'date_CI', 'Country']))
     if not work_dir:
         work_dir = get_pastml_work_dir(tree)
     os.makedirs(work_dir, exist_ok=True)
@@ -765,7 +765,8 @@ def _validate_input(tree_nwk, columns=None, name_column=None, data=None, data_se
     for root in roots:
         for n in root.traverse():
             for c in columns:
-                vs = getattr(n, c, set())
+                vs = n.props.get(c, set())
+                
                 column2states[c] |= vs
                 column2annotated_states[c] |= vs
                 if vs:

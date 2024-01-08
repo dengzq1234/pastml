@@ -55,7 +55,7 @@ def get_forest_stats(forest):
             if not node.dist:
                 num_zero_nodes += 1
 
-            if node.is_leaf():
+            if node.is_leaf:
                 num_tips += 1
                 tip_len_sum += node.dist
                 if node.dist:

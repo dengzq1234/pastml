@@ -40,14 +40,14 @@ def annotate_dates(forest, root_dates=None):
         root_dates = [0] * len(forest)
     for tree, root_date in zip(forest, root_dates):
         for node in tree.traverse('preorder'):
-            if getattr(node, DATE, None) is None:
+            if node.props.get(DATE, None) is None:
                 if node.is_root:
                     node.add_prop(DATE, root_date if root_date else 0)
                 else:
-                    node.add_prop(DATE, getattr(node.up, DATE) + node.dist)
+                    node.add_prop(DATE, node.up.props.get(DATE) + node.dist)
             else:
-                node.add_prop(DATE, float(getattr(node, DATE)))
-            ci = getattr(node, DATE_CI, None)
+                node.add_prop(DATE, float(node.props.get(DATE)))
+            ci = node.props.get(DATE_CI, None)
             if ci and not isinstance(ci, list) and not isinstance(ci, tuple):
                 node.del_prop(DATE_CI)
                 if isinstance(ci, str) and '|' in ci:

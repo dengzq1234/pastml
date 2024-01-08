@@ -110,7 +110,7 @@ def get_bottom_up_loglikelihood(tree, character, model, is_marginal=True, alter=
     for node in tree.traverse('postorder'):
         calc_node_bu_likelihood(node, allowed_state_feature, lh_feature, lh_sf_feature, lh_joint_state_feature,
                                 is_marginal, get_pij)
-    root_likelihoods = getattr(tree, lh_feature) * model.frequencies
+    root_likelihoods = tree.props.get(lh_feature) * model.frequencies
     root_likelihoods = root_likelihoods.sum() if is_marginal else root_likelihoods.max()
 
     if altered_nodes:
@@ -119,16 +119,16 @@ def get_bottom_up_loglikelihood(tree, character, model, is_marginal=True, alter=
         else:
             unalter_zero_node_joint_states(altered_nodes, character)
 
-    return np.log(root_likelihoods) - getattr(tree, lh_sf_feature) / np.log10(np.e)
+    return np.log(root_likelihoods) - tree.props.get(lh_sf_feature) / np.log10(np.e)
 
 
 def calc_node_bu_likelihood(node, allowed_state_feature, lh_feature, lh_sf_feature, lh_joint_state_feature, is_marginal,
                             get_pij):
-    allowed_states = getattr(node, allowed_state_feature)
+    allowed_states = node.props.get(allowed_state_feature)
     log_likelihood_array = np.log10(np.ones(len(allowed_states), dtype=np.float64) * allowed_states)
     factors = 0
     for child in node.children:
-        child_likelihoods = get_pij(child.dist) * getattr(child, lh_feature)
+        child_likelihoods = get_pij(child.dist) * child.props.get(lh_feature)
         if is_marginal:
             child_likelihoods = child_likelihoods.sum(axis=1)
         else:
@@ -146,7 +146,7 @@ def calc_node_bu_likelihood(node, allowed_state_feature, lh_feature, lh_sf_featu
                                         .format(node.name, child.name, child.dist))
         factors += rescale_log(log_likelihood_array)
     node.add_prop(lh_feature, np.power(10, log_likelihood_array))
-    node.add_prop(lh_sf_feature, factors + sum(getattr(_, lh_sf_feature) for _ in node.children))
+    node.add_prop(lh_sf_feature, factors + sum(_.props.get(lh_sf_feature) for _ in node.children))
 
 
 def rescale_log(loglikelihood_array):
