@@ -121,7 +121,6 @@ def acr(forest, df=None, columns=None, column2states=None, prediction_method=MPP
     """
 
     logger = logging.getLogger('pastml')
-
     if isinstance(forest, Tree):
         forest = [forest]
 
@@ -143,8 +142,9 @@ def acr(forest, df=None, columns=None, column2states=None, prediction_method=MPP
     column2rates = column2rates if column2rates else {}
 
     prediction_methods = value2list(len(columns), prediction_method, MPPA)
+    
     models = value2list(len(columns), model, F81)
-
+    
     def get_states(method, model, column):
         initial_states = column2states[column]
         if not is_ml(method) or model not in {HKY, JTT}:
@@ -169,7 +169,7 @@ def acr(forest, df=None, columns=None, column2states=None, prediction_method=MPP
                 vs = getattr(n, c, set())
                 if vs:
                     n2c2states[n][c] = vs
-
+    
     # method, model, states, params, optimise
     character2settings = {}
     for (character, prediction_method, model) in zip(columns, prediction_methods, models):
@@ -181,13 +181,14 @@ def acr(forest, df=None, columns=None, column2states=None, prediction_method=MPP
             states = get_states(prediction_method, model, character)
             character2settings[character] = [prediction_method, states]
         elif is_ml(prediction_method):
+            
             params = column2parameters[character] if character in column2parameters else None
             rate_file = column2rates[character] if character in column2rates else None
             optimise_tau = tau is None or reoptimise
             if tau is None:
                 tau = 0
             states = get_states(prediction_method, model, character)
-
+            
             missing_data, observed_frequencies, state2index = calculate_observed_freqs(character, forest, states)
 
             logger = logging.getLogger('pastml')
@@ -204,14 +205,15 @@ def acr(forest, df=None, columns=None, column2states=None, prediction_method=MPP
                                                 optimise_tau=optimise_tau, states=states, forest_stats=forest_stats,
                                                 observed_frequencies=observed_frequencies)
             character2settings[character] = [prediction_method, model_instance]
+            print(character2settings) #{'State': ['MPPA', <pastml.models.F81Model.F81Model object at 0x7f54379978e0>]}
         else:
             raise ValueError('Method {} is unknown, should be one of ML ({}), one of MP ({}) or {}'
                              .format(prediction_method, ', '.join(ML_METHODS), ', '.join(MP_METHODS), COPY))
-
     if threads < 1:
         threads = max(os.cpu_count(), 1)
-
+            
     def _work(character):
+        # annotation
         prediction_method, model_or_states = character2settings[character]
         if COPY == prediction_method:
             return {CHARACTER: character, STATES: model_or_states, METHOD: prediction_method}
@@ -230,9 +232,12 @@ def acr(forest, df=None, columns=None, column2states=None, prediction_method=MPP
                 pool.map(func=_work, iterable=character2settings.keys())
     else:
         acr_results = [_work(character) for character in character2settings.keys()]
-
+        
+    #print(acr_results[0])
+    #print(forest[0].write(format_root_node=True, format=3, features=['date', 'date_CI', 'Country']))
+    
     acr_results = flatten_lists(acr_results)
-
+    
     column2states = {acr_result[CHARACTER]: acr_result[STATES] for acr_result in acr_results}
     column2copy = {acr_result[CHARACTER]: acr_result[METHOD] == COPY for acr_result in acr_results}
     if resolve_polytomies and resolve_trees(column2states, forest):
@@ -521,7 +526,7 @@ def pastml_pipeline(tree, data=None, data_sep='\t', id_index=0,
         _validate_input(tree, columns, name_column if html_compressed or html_mixed else None, data, data_sep, id_index,
                         root_date if html_compressed or html or html_mixed or upload_to_itol else None,
                         copy_only=copy_only, parameters=parameters, rates=rate_matrix)
-
+    print(roots[0].write(format_root_node=True, format=3, features=['date', 'date_CI', 'Country']))
     if not work_dir:
         work_dir = get_pastml_work_dir(tree)
     os.makedirs(work_dir, exist_ok=True)
@@ -534,24 +539,26 @@ def pastml_pipeline(tree, data=None, data_sep='\t', id_index=0,
                       column2rates=rates,
                       force_joint=forced_joint, threads=threads, reoptimise=reoptimise, tau=None if smoothing else 0,
                       resolve_polytomies=resolve_polytomies, frequency_smoothing=frequency_smoothing)
-
+    
     column2states = {acr_result[CHARACTER]: acr_result[STATES] for acr_result in acr_results}
-
+    
     if not out_data:
         out_data = os.path.join(work_dir, get_combined_ancestral_state_file())
 
     state_df = _serialize_predicted_states(sorted(column2states.keys()), out_data, roots,
                                            dates_are_dates=age_label == DATE_LABEL)
-
+    
     # a meta-method would have added a suffix to the name feature
     if html_compressed and name_column and name_column not in column2states:
         ml_name_column = get_personalized_feature_name(name_column, get_default_ml_method())
         name_column = ml_name_column if ml_name_column in column2states \
             else get_personalized_feature_name(name_column, get_default_mp_method())
-
+    
     itol_result = None
     new_tree = os.path.join(work_dir, get_named_tree_file(tree))
     features = [DATE, DATE_CI] + list(column2states.keys())
+    #print(features)
+    
     clear_extra_features(roots, features)
     nwks = '\n'.join([root.write(format_root_node=True, format=3, features=features) for root in roots])
     with open(new_tree, 'w+') as f:
@@ -763,7 +770,7 @@ def _validate_input(tree_nwk, columns=None, name_column=None, data=None, data_se
                 column2annotated_states[c] |= vs
                 if vs:
                     column2annotated[c] += 1
-            if n.is_leaf():
+            if n.is_leaf:
                 num_tips += 1
 
     if column2annotated:
@@ -771,6 +778,7 @@ def _validate_input(tree_nwk, columns=None, name_column=None, data=None, data_se
     else:
         c, num_annotated = columns[0], 0
     percentage_unknown = (num_tips - num_annotated) / num_tips
+    print("hey", percentage_unknown)
     if percentage_unknown >= (.9 if not copy_only else 1):
         raise ValueError('{:.1f}% of tip annotations for character "{}" are unknown, '
                          'not enough data to infer ancestral states. '

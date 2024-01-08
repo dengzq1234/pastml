@@ -5,7 +5,8 @@ from collections import Counter, defaultdict
 from datetime import datetime
 
 from Bio import Phylo
-from ete3 import Tree, TreeNode
+#from ete3 import Tree, TreeNode
+from ete4 import Tree
 
 POSTORDER = 'postorder'
 
@@ -28,7 +29,7 @@ IS_POLYTOMY = 'polytomy'
 def get_dist_to_root(tip):
     dist_to_root = 0
     n = tip
-    while not n.is_root():
+    while not n.is_root:
         dist_to_root += n.dist
         n = n.up
     return dist_to_root
@@ -40,18 +41,18 @@ def annotate_dates(forest, root_dates=None):
     for tree, root_date in zip(forest, root_dates):
         for node in tree.traverse('preorder'):
             if getattr(node, DATE, None) is None:
-                if node.is_root():
-                    node.add_feature(DATE, root_date if root_date else 0)
+                if node.is_root:
+                    node.add_prop(DATE, root_date if root_date else 0)
                 else:
-                    node.add_feature(DATE, getattr(node.up, DATE) + node.dist)
+                    node.add_prop(DATE, getattr(node.up, DATE) + node.dist)
             else:
-                node.add_feature(DATE, float(getattr(node, DATE)))
+                node.add_prop(DATE, float(getattr(node, DATE)))
             ci = getattr(node, DATE_CI, None)
             if ci and not isinstance(ci, list) and not isinstance(ci, tuple):
-                node.del_feature(DATE_CI)
+                node.del_prop(DATE_CI)
                 if isinstance(ci, str) and '|' in ci:
                     try:
-                        node.add_feature(DATE_CI, [float(_) for _ in ci.split('|')])
+                        node.add_prop(DATE_CI, [float(_) for _ in ci.split('|')])
                     except:
                         pass
 
@@ -72,15 +73,15 @@ def name_tree(tree, suffix=""):
         if _.name:
             existing_names[_.name] += 1
             if '.polytomy_' in _.name:
-                _.add_feature(IS_POLYTOMY, 1)
+                _.add_prop(IS_POLYTOMY, 1)
     if n_nodes == len(existing_names):
         return
     i = 0
     new_existing_names = Counter()
     for node in tree.traverse('preorder'):
         name_prefix = node.name if node.name and existing_names[node.name] < 10 \
-            else '{}{}{}'.format('t' if node.is_leaf() else 'n', i, suffix)
-        name = 'root{}'.format(suffix) if node.is_root() else name_prefix
+            else '{}{}{}'.format('t' if node.is_leaf else 'n', i, suffix)
+        name = 'root{}'.format(suffix) if node.is_root else name_prefix
         while name is None or name in new_existing_names:
             name = '{}{}{}'.format(name_prefix, i, suffix)
             i += 1
@@ -106,7 +107,7 @@ def collapse_zero_branches(forest, features_to_be_merged=None):
 
     for tree in forest:
         for n in list(tree.traverse('postorder')):
-            zero_children = [child for child in n.children if not child.is_leaf() and child.dist <= 0]
+            zero_children = [child for child in n.children if not child.is_leaf and child.dist <= 0]
             if not zero_children:
                 continue
             for feature in features_to_be_merged:
@@ -118,7 +119,7 @@ def collapse_zero_branches(forest, features_to_be_merged=None):
                     value = set.union(*(getattr(child, feature, set()) for child in zero_children)) \
                             | getattr(n, feature, set())
                 if value:
-                    n.add_feature(feature, value)
+                    n.add_prop(feature, value)
             for child in zero_children:
                 n.remove_child(child)
                 for grandchild in child.children:
@@ -138,7 +139,7 @@ def remove_certain_leaves(tr, to_remove=lambda node: False):
 
     tips = [tip for tip in tr if to_remove(tip)]
     for node in tips:
-        if node.is_root():
+        if node.is_root:
             return None
         parent = node.up
         parent.remove_child(node)
@@ -146,7 +147,7 @@ def remove_certain_leaves(tr, to_remove=lambda node: False):
         if len(parent.children) == 1:
             brother = parent.children[0]
             brother.dist += parent.dist
-            if parent.is_root():
+            if parent.is_root:
                 brother.up = None
                 tr = brother
             else:
@@ -170,24 +171,42 @@ def read_forest(tree_path, columns=None):
     return [read_tree(nwk + ';', columns) for nwk in nwks[:-1]]
 
 
+# def read_tree(tree_path, columns=None):
+#     tree = None
+#     for f in (3, 2, 5, 0, 1, 4, 6, 7, 8, 9):
+#         try:
+#             tree = Tree(tree_path, format=f)
+#             break
+#         except:
+#             continue
+#     if not tree:
+#         raise ValueError('Could not read the tree {}. Is it a valid newick?'.format(tree_path))
+#     if columns:
+#         for n in tree.traverse():
+#             for c in columns:
+#                 vs = set(getattr(n, c).split('|')) if hasattr(n, c) else set()
+#                 if vs:
+#                     n.add_prop(c, vs)
+#     return tree
+
 def read_tree(tree_path, columns=None):
     tree = None
-    for f in (3, 2, 5, 0, 1, 4, 6, 7, 8, 9):
-        try:
-            tree = Tree(tree_path, format=f)
-            break
-        except:
-            continue
-    if not tree:
-        raise ValueError('Could not read the tree {}. Is it a valid newick?'.format(tree_path))
+    # for f in (3, 2, 5, 0, 1, 4, 6, 7, 8, 9):
+    #     try:
+    #         tree = Tree(tree_path, format=f)
+    #         break
+    #     except:
+    #         continue
+    # if not tree:
+    #     raise ValueError('Could not read the tree {}. Is it a valid newick?'.format(tree_path))
+    tree = Tree(tree_path, parser=1)
     if columns:
         for n in tree.traverse():
             for c in columns:
                 vs = set(getattr(n, c).split('|')) if hasattr(n, c) else set()
                 if vs:
-                    n.add_feature(c, vs)
+                    n.add_prop(c, vs)
     return tree
-
 
 def parse_nexus(tree_path, columns=None):
     trees = []
@@ -206,7 +225,7 @@ def parse_nexus(tree_path, columns=None):
                 name = getattr(clade, 'confidence', None)
                 if not isinstance(name, str):
                     name = None
-            node = TreeNode(dist=dist, name=name)
+            node = Tree(dist=dist, name=name)
             if parent is None:
                 tree = node
             else:
@@ -241,18 +260,18 @@ def parse_nexus(tree_path, columns=None):
             if date is not None:
                 try:
                     date = float(date)
-                    node.add_feature(DATE, date)
+                    node.add_prop(DATE, date)
                 except:
                     pass
             if ci is not None:
                 try:
                     ci = [float(_) for _ in ci]
-                    node.add_feature(DATE_CI, ci)
+                    node.add_prop(DATE_CI, ci)
                 except:
                     pass
             if columns2values:
                 for c, vs in columns2values.items():
-                    node.add_feature(c, vs)
+                    node.add_prop(c, vs)
             todo.extend((c, node) for c in clade.clades)
         for n in tree.traverse('preorder'):
             date, ci = getattr(n, DATE, None), getattr(n, DATE_CI, None)
@@ -260,16 +279,16 @@ def parse_nexus(tree_path, columns=None):
                 for c in n.children:
                     if c.dist == 0:
                         if getattr(c, DATE, None) is None:
-                            c.add_feature(DATE, date)
+                            c.add_prop(DATE, date)
                         if getattr(c, DATE_CI, None) is None:
-                            c.add_feature(DATE_CI, ci)
+                            c.add_prop(DATE_CI, ci)
         for n in tree.traverse('postorder'):
             date, ci = getattr(n, DATE, None), getattr(n, DATE_CI, None)
-            if not n.is_root() and n.dist == 0 and (date is not None or ci is not None):
+            if not n.is_root and n.dist == 0 and (date is not None or ci is not None):
                 if getattr(n.up, DATE, None) is None:
-                    n.up.add_feature(DATE, date)
+                    n.up.add_prop(DATE, date)
                 if getattr(n.up, DATE_CI, None) is None:
-                    n.up.add_feature(DATE_CI, ci)
+                    n.up.add_prop(DATE_CI, ci)
 
         # propagate dates up to the root if needed
         if getattr(tree, DATE, None) is None:
@@ -277,7 +296,7 @@ def parse_nexus(tree_path, columns=None):
             if dated_node:
                 while dated_node != tree:
                     if getattr(dated_node.up, DATE, None) is None:
-                        dated_node.up.add_feature(DATE, getattr(dated_node, DATE) - dated_node.dist)
+                        dated_node.up.add_prop(DATE, getattr(dated_node, DATE) - dated_node.dist)
                     dated_node = dated_node.up
 
         trees.append(tree)
@@ -368,17 +387,17 @@ def group_children_if_needed(n, children, columns, state):
         return False
     dist = child.dist
     pol = n.add_child(dist=dist, name='{}.polytomy_{}'.format(n.name, state))
-    pol.add_feature(IS_POLYTOMY, 1)
+    pol.add_prop(IS_POLYTOMY, 1)
     c_date = getattr(child, DATE)
-    pol.add_feature(DATE, c_date)
+    pol.add_prop(DATE, c_date)
     n_ci = getattr(n, DATE_CI, None)
     c_ci = getattr(child, DATE_CI, None)
-    pol.add_feature(DATE_CI, (None if not n_ci or not isinstance(n_ci, list)
+    pol.add_prop(DATE_CI, (None if not n_ci or not isinstance(n_ci, list)
                               else [n_ci[0],
                                     (c_ci[1] if c_ci and isinstance(c_ci, list) and len(c_ci) > 1
                                      else c_date)]))
     for c in columns:
-        pol.add_feature(c, getattr(child, c))
+        pol.add_prop(c, getattr(child, c))
     for c in children:
         n.remove_child(c)
         pol.add_child(c, dist=c.dist - dist)
@@ -465,14 +484,14 @@ def clear_extra_features(forest, features):
         for n in tree.traverse():
             for f in set(n.features) - features:
                 if f not in features:
-                    n.del_feature(f)
+                    n.del_prop(f)
 
 
 def copy_forest(forest, features=None):
     features = set(features if features else forest[0].features)
     copied_forest = []
     for tree in forest:
-        copied_tree = TreeNode()
+        copied_tree = Tree()
         todo = [(tree, copied_tree)]
         copied_forest.append(copied_tree)
         while todo:
@@ -482,7 +501,7 @@ def copy_forest(forest, features=None):
             copied_n.name = n.name
             for f in features:
                 if hasattr(n, f):
-                    copied_n.add_feature(f, getattr(n, f))
+                    copied_n.add_prop(f, getattr(n, f))
             for c in n.children:
                 todo.append((c, copied_n.add_child()))
     return copied_forest

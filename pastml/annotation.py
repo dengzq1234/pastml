@@ -116,8 +116,8 @@ def preannotate_forest(forest, df=None, gdf=None):
     for tree in forest:
         for node in tree.traverse('postorder'):
             if node.name in gdf.index:
-                node.add_features(**gdf.loc[node.name, :].to_dict())
+                node.add_props(**gdf.loc[node.name, :].to_dict())
             else:
                 for c in gdf.columns:
-                    node.del_feature(c)
+                    node.del_prop(c)
     return gdf.columns, gdf
