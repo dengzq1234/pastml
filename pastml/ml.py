@@ -273,18 +273,18 @@ def calculate_top_down_likelihood(tree, character, model):
 
 
 def calc_node_td_likelihood(node, td_lh_feature, td_lh_sf_feature, bu_lh_feature, bu_lh_sf_feature, get_pij):
-    if node.is_root():
-        node.add_prop(td_lh_feature, np.ones(len(getattr(node, bu_lh_feature)), np.float64))
+    if node.is_root:
+        node.add_prop(td_lh_feature, np.ones(len(node.props.get(bu_lh_feature)), np.float64))
         node.add_prop(td_lh_sf_feature, 0)
         return
     parent = node.up
     node_pjis = np.transpose(get_pij(node.dist))
-    node_contribution = getattr(node, bu_lh_feature).dot(node_pjis)
+    node_contribution = node.props.get(bu_lh_feature).dot(node_pjis)
     node_contribution[node_contribution <= 0] = 1
-    parent_loglikelihood = np.log10(getattr(parent, td_lh_feature)) \
-                           + np.log10(getattr(parent, bu_lh_feature)) - np.log10(node_contribution)
-    factors = getattr(parent, td_lh_sf_feature) \
-              + getattr(parent, bu_lh_sf_feature) - getattr(node, bu_lh_sf_feature)
+    parent_loglikelihood = np.log10(parent.props.get(td_lh_feature)) \
+                           + np.log10(parent.props.get(bu_lh_feature)) - np.log10(node_contribution)
+    factors = parent.props.get(td_lh_sf_feature) \
+              + parent.props.get(bu_lh_sf_feature) - node.props.get(bu_lh_sf_feature)
     factors += rescale_log(parent_loglikelihood)
     parent_likelihood = np.power(10, parent_loglikelihood)
     td_likelihood = parent_likelihood.dot(node_pjis)
@@ -310,7 +310,7 @@ def initialize_allowed_states(tree, feature, states):
     state2index = dict(zip(states, range(n)))
 
     for node in tree.traverse():
-        node_states = getattr(node, feature, set())
+        node_states = node.props.get(feature, set())
         if not node_states:
             allowed_states = np.ones(n, dtype=int)
         else:
@@ -329,7 +329,7 @@ def get_zero_clusters_with_states(tree, feature):
     """
 
     def has_state(_):
-        state = getattr(_, feature, None)
+        state = _.props.get(feature, None)
         return state is not None and state != ''
 
     todo = [tree]
@@ -370,15 +370,15 @@ def alter_zero_node_allowed_states(tree, feature):
         counts = None
         for c in zero_cluster_with_states:
             if counts is None:
-                counts = getattr(c, allowed_state_feature).copy()
+                counts = c.props.get(allowed_state_feature).copy()
             else:
-                counts += getattr(c, allowed_state_feature)
+                counts += c.props.get(allowed_state_feature)
         if counts.max() == len(zero_cluster_with_states):
             continue
         # Otherwise set all zero-cluster node states to state union
         allowed_states = None
         for c in zero_cluster_with_states:
-            initial_allowed_states = getattr(c, allowed_state_feature).copy()
+            initial_allowed_states = c.props.get(allowed_state_feature).copy()
             if allowed_states is None:
                 allowed_states = initial_allowed_states.copy()
             else:
@@ -401,8 +401,8 @@ def unalter_zero_node_allowed_states(altered_nodes, feature):
     allowed_state_feature = get_personalized_feature_name(feature, ALLOWED_STATES)
     allowed_state_feature_unaltered = get_personalized_feature_name(feature, ALLOWED_STATES + '.initial')
     for n in altered_nodes:
-        initial_allowed_states = getattr(n, allowed_state_feature_unaltered)
-        allowed_states = getattr(n, allowed_state_feature) & initial_allowed_states
+        initial_allowed_states = n.props.get(allowed_state_feature_unaltered)
+        allowed_states = n.props.get(allowed_state_feature) & initial_allowed_states
         n.add_prop(allowed_state_feature,
                       (allowed_states if np.any(allowed_states > 0) else initial_allowed_states))
 
@@ -419,12 +419,12 @@ def unalter_zero_node_joint_states(altered_nodes, feature):
     lh_joint_state_feature = get_personalized_feature_name(feature, BU_LH_JOINT_STATES)
     allowed_state_feature_unaltered = get_personalized_feature_name(feature, ALLOWED_STATES + '.initial')
     for n in altered_nodes:
-        initial_allowed_states = getattr(n, allowed_state_feature_unaltered)
+        initial_allowed_states = n.props.get(allowed_state_feature_unaltered)
         allowed_index = np.argmax(initial_allowed_states)
         if len(initial_allowed_states[initial_allowed_states > 0]) == 1:
             n.add_prop(lh_joint_state_feature, np.ones(len(initial_allowed_states), int) * allowed_index)
         else:
-            joint_states = getattr(n, lh_joint_state_feature)
+            joint_states = n.props.get(lh_joint_state_feature)
             for i in range(len(initial_allowed_states)):
                 if not initial_allowed_states[joint_states[i]]:
                     joint_states[i] = allowed_index
@@ -455,11 +455,11 @@ def calculate_marginal_likelihoods(tree, feature, frequencies, clean_up=True):
 
 def calc_node_marginal_likelihood(node, lh_feature, lh_sf_feature, bu_lh_feature, bu_lh_sf_feature, td_lh_feature,
                                   td_lh_sf_feature, allowed_state_feature, frequencies, clean_up):
-    loglikelihood = np.log10(getattr(node, bu_lh_feature)) + np.log10(getattr(node, td_lh_feature)) \
-                    + np.log10(frequencies * getattr(node, allowed_state_feature))
+    loglikelihood = np.log10(node.props.get(bu_lh_feature)) + np.log10(node.props.get(td_lh_feature)) \
+                    + np.log10(frequencies * node.props.get(allowed_state_feature))
     factors = rescale_log(loglikelihood)
     node.add_prop(lh_feature, np.power(10, loglikelihood))
-    node.add_prop(lh_sf_feature, factors + getattr(node, td_lh_sf_feature) + getattr(node, bu_lh_sf_feature))
+    node.add_prop(lh_sf_feature, factors + node.props.get(td_lh_sf_feature) + node.props.get(bu_lh_sf_feature))
     if clean_up:
         node.del_prop(bu_lh_feature)
         node.del_prop(bu_lh_sf_feature)
@@ -479,9 +479,9 @@ def check_marginal_likelihoods(tree, feature):
     lh_sf_feature = get_personalized_feature_name(feature, LH_SF)
 
     for node in tree.traverse():
-        if not node.is_root():
-            node_loglh = np.log10(getattr(node, lh_feature).sum()) - getattr(node, lh_sf_feature)
-            parent_loglh = np.log10(getattr(node.up, lh_feature).sum()) - getattr(node.up, lh_sf_feature)
+        if not node.is_root:
+            node_loglh = np.log10(node.props.get(lh_feature).sum()) - node.props.get(lh_sf_feature)
+            parent_loglh = np.log10(node.up.props.get(lh_feature).sum()) - node.up.props.get(lh_sf_feature)
             assert (round(node_loglh, 2) == round(parent_loglh, 2))
 
 
@@ -498,7 +498,7 @@ def convert_likelihoods_to_probabilities(tree, feature, states):
     name2probs = {}
 
     for node in tree.traverse():
-        lh = getattr(node, lh_feature)
+        lh = node.props.get(lh_feature)
         name2probs[node.name] = lh / lh.sum()
 
     return pd.DataFrame.from_dict(name2probs, orient='index', columns=states)
@@ -539,12 +539,13 @@ def choose_ancestral_states_mppa(tree, feature, states, force_joint=True):
     # select k in 1:n such as the correction between choosing 0, 0, ..., 1/k, ..., 1/k and our sorted array is min
     # and return the corresponding states
     for node in tree.traverse():
-        marginal_likelihoods = getattr(node, lh_feature)
-        if hasattr(node, allowed_state_feature + '.initial'):
-            marginal_likelihoods *= getattr(node, allowed_state_feature + '.initial')
+        marginal_likelihoods = node.props.get(lh_feature)
+        #if hasattr(node, allowed_state_feature + '.initial'):
+        if allowed_state_feature + '.initial' in node.props.keys():
+            marginal_likelihoods *= node.props.get(allowed_state_feature + '.initial')
         marginal_probs = marginal_likelihoods / marginal_likelihoods.sum()
         if force_joint:
-            joint_index = getattr(node, joint_state_feature)
+            joint_index = node.props.get(joint_state_feature)
             joint_prob = marginal_probs[joint_index]
             marginal_probs = np.hstack((np.sort(np.delete(marginal_probs, joint_index)), [joint_prob]))
         else:
@@ -591,9 +592,10 @@ def choose_ancestral_states_map(tree, feature, states):
     _, state2array = get_state2allowed_states(states, False)
 
     for node in tree.traverse():
-        marginal_likelihoods = getattr(node, lh_feature)
-        if hasattr(node, allowed_state_feature + '.initial'):
-            marginal_likelihoods *= getattr(node, allowed_state_feature + '.initial')
+        marginal_likelihoods = node.props.get(lh_feature)
+        #if hasattr(node, allowed_state_feature + '.initial'):
+        if allowed_state_feature + '.initial' in node.props.keys():
+            marginal_likelihoods *= node.props.get(allowed_state_feature + '.initial')
         node.add_prop(allowed_state_feature, state2array[marginal_likelihoods.argmax()])
 
 
@@ -619,9 +621,9 @@ def choose_ancestral_states_joint(tree, feature, states, frequencies):
         node.add_prop(allowed_state_feature, state2array[state_index])
 
         for child in node.children:
-            chose_consistent_state(child, getattr(child, lh_state_feature)[state_index])
+            chose_consistent_state(child, child.props.get(lh_state_feature)[state_index])
 
-    chose_consistent_state(tree, (getattr(tree, lh_feature) * frequencies).argmax())
+    chose_consistent_state(tree, (tree.props.get(lh_feature) * frequencies).argmax())
 
 
 def get_state2allowed_states(states, by_name=True):
@@ -793,21 +795,21 @@ def marginal_counts(forest, character, model, n_repetitions=1_000):
         calculate_top_down_likelihood(tree, character, model=model)
 
         for parent in tree.traverse('levelorder'):
-            if parent.is_root():
+            if parent.is_root:
                 calc_node_marginal_likelihood(parent, lh_feature, lh_sf_feature, bu_lh_feature, bu_lh_sf_feature,
                                               td_lh_feature, td_lh_sf_feature, allowed_state_feature, model.frequencies,
                                               False)
-                marginal_likelihoods = getattr(parent, lh_feature)
+                marginal_likelihoods = parent.props.get(lh_feature)
                 marginal_probs = marginal_likelihoods / marginal_likelihoods.sum()
                 # draw random states according to marginal probabilities (n_repetitions times)
                 drawn_state_nums = Counter(np.random.choice(state_ids, size=n_repetitions, p=marginal_probs))
                 parent_state_counts = np.array([drawn_state_nums[_] for _ in state_ids])
                 parent.add_prop(state_count_feature, parent_state_counts)
             else:
-                parent_state_counts = getattr(parent, state_count_feature)
+                parent_state_counts = arent.props.get(state_count_feature)
 
             if parent in altered_nodes:
-                initial_allowed_states = getattr(parent, initial_allowed_state_feature)
+                initial_allowed_states = parent.props.get(initial_allowed_state_feature)
                 ps_counts_initial = parent_state_counts * initial_allowed_states
                 if np.count_nonzero(ps_counts_initial):
                     ps_counts_initial = n_repetitions * ps_counts_initial / ps_counts_initial.sum()
@@ -820,8 +822,8 @@ def marginal_counts(forest, character, model, n_repetitions=1_000):
 
             for node in parent.children:
                 node_pjis = np.transpose(get_pij(node.dist))
-                marginal_loglikelihood = np.log10(getattr(node, bu_lh_feature)) + np.log10(node_pjis) \
-                                         + np.log10(model.frequencies * getattr(node, allowed_state_feature))
+                marginal_loglikelihood = np.log10(node.props.get(bu_lh_feature)) + np.log10(node_pjis) \
+                                         + np.log10(model.frequencies * node.props.get(allowed_state_feature))
                 rescale_log(marginal_loglikelihood)
                 marginal_likelihood = np.power(10, marginal_loglikelihood)
                 marginal_probs = marginal_likelihood / marginal_likelihood.sum(axis=1)[:, np.newaxis]
@@ -841,7 +843,7 @@ def marginal_counts(forest, character, model, n_repetitions=1_000):
                             same_state_counts[j] += state_counts_j[j]
 
                 if node in altered_nodes:
-                    initial_allowed_states = getattr(node, initial_allowed_state_feature)
+                    initial_allowed_states = node.props.get(initial_allowed_state_feature)
                     counts_initial = state_counts * initial_allowed_states
                     if np.count_nonzero(counts_initial):
                         counts_initial = n_repetitions * counts_initial / counts_initial.sum()
@@ -928,7 +930,7 @@ def convert_allowed_states2feature(tree, feature, states, out_feature=None):
         out_feature = feature
     allowed_states_feature = get_personalized_feature_name(feature, ALLOWED_STATES)
     for node in tree.traverse():
-        node.add_prop(out_feature, set(states[getattr(node, allowed_states_feature).astype(bool)]))
+        node.add_prop(out_feature, set(states[node.props.get(allowed_states_feature).astype(bool)]))
 
 
 def _parsimonious_states2allowed_states(tree, ps_feature, feature, states):
@@ -936,7 +938,7 @@ def _parsimonious_states2allowed_states(tree, ps_feature, feature, states):
     state2index = dict(zip(states, range(n)))
     allowed_state_feature = get_personalized_feature_name(feature, ALLOWED_STATES)
     for node in tree.traverse():
-        pars_states = getattr(node, ps_feature)
+        pars_states = node.props.get(ps_feature)
         allowed_states = np.zeros(n, dtype=int)
         for state in pars_states:
             allowed_states[state2index[state]] = 1

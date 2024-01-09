@@ -65,12 +65,12 @@ def initialise_parsimonious_states(tree, feature, states):
     all_states = set(states)
 
     for node in tree.traverse():
-        state = getattr(node, feature, set())
+        state = node.props.get(feature, set())
         if not state:
-            node.add_feature(ps_feature_down, all_states)
+            node.add_prop(ps_feature_down, all_states)
         else:
-            node.add_feature(ps_feature_down, state)
-        node.add_feature(ps_feature, getattr(node, ps_feature_down))
+            node.add_prop(ps_feature_down, state)
+        node.add_prop(ps_feature, node.props.get(node, ps_feature_down))
 
 
 def get_most_common_states(state_iterable):
@@ -115,11 +115,11 @@ def uppass(tree, feature):
     ps_feature = get_personalized_feature_name(feature, BU_PARS_STATES)
 
     for node in tree.traverse('postorder'):
-        if not node.is_leaf():
-            children_states = get_most_common_states(getattr(child, ps_feature) for child in node.children)
-            node_states = getattr(node, ps_feature)
+        if not node.is_leaf:
+            children_states = get_most_common_states(child.props.get(ps_feature) for child in node.children)
+            node_states = node.props.get(ps_feature)
             state_intersection = node_states & children_states
-            node.add_feature(ps_feature, state_intersection if state_intersection else node_states)
+            node.add_prop(ps_feature, state_intersection if state_intersection else node_states)
 
 
 def acctran(tree, character, feature=PARS_STATES):
@@ -149,13 +149,13 @@ def acctran(tree, character, feature=PARS_STATES):
     ps_feature_down = get_personalized_feature_name(character, BU_PARS_STATES)
 
     for node in tree.traverse('preorder'):
-        if node.is_root():
-            node.add_feature(feature, getattr(node, ps_feature_down))
-        node_states = getattr(node, feature)
+        if node.is_root:
+            node.add_prop(feature, node.props.get(ps_feature_down))
+        node_states = node.props.get(feature)
         for child in node.children:
-            child_states = getattr(child, ps_feature_down)
+            child_states = child.props.get(ps_feature_down)
             state_intersection = node_states & child_states
-            child.add_feature(feature, state_intersection if state_intersection else child_states)
+            child.add_prop(feature, state_intersection if state_intersection else child_states)
 
 
 def downpass(tree, feature, states):
@@ -191,23 +191,23 @@ def downpass(tree, feature, states):
     ps_feature = get_personalized_feature_name(feature, PARS_STATES)
 
     for node in tree.traverse('preorder'):
-        if node.is_root():
-            node.add_feature(ps_feature_up, set(states))
+        if node.is_root:
+            node.add_prop(ps_feature_up, set(states))
         else:
-            node.add_feature(ps_feature_up,
-                             get_most_common_states([getattr(node.up, ps_feature_up)]
-                                                    + [getattr(sibling, ps_feature_down) for sibling in node.up.children
+            node.add_prop(ps_feature_up,
+                             get_most_common_states([node.up.props.get(ps_feature_up)]
+                                                    + [sibling.props.get(ps_feature_down) for sibling in node.up.children
                                                        if sibling != node]))
-        down_up_states = get_most_common_states([getattr(node, ps_feature_up)]
-                                                + [getattr(child, ps_feature_down) for child in node.children]) \
-            if not node.is_leaf() else getattr(node, ps_feature_up)
-        preset_states = getattr(node, ps_feature)
+        down_up_states = get_most_common_states([node.props.get(ps_feature_up)]
+                                                + [child.props.get(ps_feature_down) for child in node.children]) \
+            if not node.is_leaf else node.props.get(ps_feature_up)
+        preset_states = node.props.get(ps_feature)
         state_intersection = down_up_states & preset_states
-        node.add_feature(ps_feature, state_intersection if state_intersection else preset_states)
+        node.add_prop(ps_feature, state_intersection if state_intersection else preset_states)
 
     for node in tree.traverse():
-        node.del_feature(ps_feature_down)
-        node.del_feature(ps_feature_up)
+        node.del_prop(ps_feature_down)
+        node.del_prop(ps_feature_up)
 
 
 def deltran(tree, feature):
@@ -234,12 +234,12 @@ def deltran(tree, feature):
     ps_feature = get_personalized_feature_name(feature, PARS_STATES)
 
     for node in tree.traverse('preorder'):
-        if not node.is_root():
-            node_states = getattr(node, ps_feature)
-            parent_states = getattr(node.up, ps_feature)
+        if not node.is_root:
+            node_states = node.props.get(ps_feature)
+            parent_states = node.up.props.get(ps_feature)
             state_intersection = node_states & parent_states
             if state_intersection:
-                node.add_feature(ps_feature, state_intersection)
+                node.add_prop(ps_feature, state_intersection)
 
 
 def parsimonious_acr(forest, character, prediction_method, states, num_nodes, num_tips):
@@ -304,8 +304,8 @@ def parsimonious_acr(forest, character, prediction_method, states, num_nodes, nu
         for tree in forest:
             for node in tree.traverse():
                 if prediction_method == ACCTRAN:
-                    node.del_feature(bu_feature)
-                node.del_feature(feature)
+                    node.del_prop(bu_feature)
+                node.del_prop(feature)
 
     if prediction_method != ACCTRAN:
         feature = get_personalized_feature_name(character, PARS_STATES)
@@ -324,7 +324,7 @@ def parsimonious_acr(forest, character, prediction_method, states, num_nodes, nu
             process_result(DELTRAN, feature)
         for tree in forest:
             for node in tree.traverse():
-                node.del_feature(feature)
+                node.del_prop(feature)
 
     logger.debug("Parsimonious reconstruction for {} requires {} state changes."
                  .format(character, result[STEPS]))
@@ -348,8 +348,8 @@ def choose_parsimonious_states(tree, ps_feature, out_feature):
     unresolved_nodes = 0
     num_states = 0
     for node in tree.traverse():
-        states = getattr(node, ps_feature)
-        node.add_feature(out_feature, states)
+        states = node.props.get(ps_feature)
+        node.add_prop(out_feature, states)
         n = len(states)
         num_scenarios *= n
         unresolved_nodes += 1 if n > 1 else 0
@@ -361,20 +361,20 @@ def get_num_parsimonious_steps(tree, feature):
     ps_feature_num = get_personalized_feature_name(feature, PARS_STATE2NUM)
 
     for node in tree.traverse('postorder'):
-        if node.is_leaf():
-            node.add_feature(ps_feature_num, {state: 0 for state in getattr(node, feature)})
+        if node.is_leaf:
+            node.add_prop(ps_feature_num, {state: 0 for state in node.props.get(feature)})
         else:
             state2num = {}
-            for state in getattr(node, feature):
+            for state in node.props.get(feature):
                 num = 0
                 for child in node.children:
-                    child_state2num = getattr(child, ps_feature_num)
+                    child_state2num = child.props.get(ps_feature_num)
                     num += min(((0 if state == child_state else 1) + child_num)
                                for (child_state, child_num) in child_state2num.items())
                 state2num[state] = num
-            node.add_feature(ps_feature_num, state2num)
+            node.add_prop(ps_feature_num, state2num)
             for child in node.children:
-                child.del_feature(ps_feature_num)
-    state2num = getattr(tree, ps_feature_num)
-    tree.del_feature(ps_feature_num)
+                child.del_prop(ps_feature_num)
+    state2num = tree.props.get(ps_feature_num)
+    tree.del_prop(ps_feature_num)
     return min(state2num.values())

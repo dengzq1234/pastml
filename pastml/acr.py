@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from Bio.Phylo import NewickIO, write
 from Bio.Phylo.NewickIO import StringIO
-from ete3 import Tree
+from ete4 import Tree
 
 from pastml import col_name2cat, value2list, STATES, METHOD, CHARACTER, get_personalized_feature_name, numeric2datetime, \
     datetime2numeric
@@ -157,8 +157,8 @@ def acr(forest, df=None, columns=None, column2states=None, prediction_method=MPP
         state_set = set(states)
         for root in forest:
             for n in root.traverse():
-                if hasattr(n, column):
-                    n.add_feature(column, state_set & getattr(n, column))
+                if column in n.props.keys():
+                    n.add_feature(column, state_set & n.props.get(column))
         return states
 
     # If we gonna resolve polytomies we might need to get back to the initial states so let's memorise them
@@ -166,7 +166,7 @@ def acr(forest, df=None, columns=None, column2states=None, prediction_method=MPP
     for root in forest:
         for n in root.traverse():
             for c in columns:
-                vs = getattr(n, c, set())
+                vs = n.props.get(c, set())
                 if vs:
                     n2c2states[n][c] = vs
     
@@ -181,7 +181,6 @@ def acr(forest, df=None, columns=None, column2states=None, prediction_method=MPP
             states = get_states(prediction_method, model, character)
             character2settings[character] = [prediction_method, states]
         elif is_ml(prediction_method):
-            
             params = column2parameters[character] if character in column2parameters else None
             rate_file = column2rates[character] if character in column2rates else None
             optimise_tau = tau is None or reoptimise
@@ -205,7 +204,7 @@ def acr(forest, df=None, columns=None, column2states=None, prediction_method=MPP
                                                 optimise_tau=optimise_tau, states=states, forest_stats=forest_stats,
                                                 observed_frequencies=observed_frequencies)
             character2settings[character] = [prediction_method, model_instance]
-            print(character2settings) #{'State': ['MPPA', <pastml.models.F81Model.F81Model object at 0x7f54379978e0>]}
+            #print(character2settings) #{'State': ['MPPA', <pastml.models.F81Model.F81Model object at 0x7f54379978e0>]}
         else:
             raise ValueError('Method {} is unknown, should be one of ML ({}), one of MP ({}) or {}'
                              .format(prediction_method, ', '.join(ML_METHODS), ', '.join(MP_METHODS), COPY))
@@ -252,7 +251,7 @@ def acr(forest, df=None, columns=None, column2states=None, prediction_method=MPP
                         n.add_feature(c, c2states[c])
                     # if it is a copy method we just need to keep the polytomy state
                     # as there is no way to calculate a state
-                    elif not getattr(n, IS_POLYTOMY, False) or not column2copy[c]:
+                    elif not n.props.get(IS_POLYTOMY, False) or not column2copy[c]:
                         n.del_feature(c)
 
         forest_stats = ForestStats(forest)
@@ -292,7 +291,7 @@ def calculate_observed_freqs(character, forest, states):
     observed_frequencies = np.zeros(n, np.float64)
     for tree in forest:
         for _ in tree:
-            state = getattr(_, character, set())
+            state = _.props.get(character, set())
             if state:
                 num_node_states = len(state)
                 for _ in state:
@@ -526,7 +525,7 @@ def pastml_pipeline(tree, data=None, data_sep='\t', id_index=0,
         _validate_input(tree, columns, name_column if html_compressed or html_mixed else None, data, data_sep, id_index,
                         root_date if html_compressed or html or html_mixed or upload_to_itol else None,
                         copy_only=copy_only, parameters=parameters, rates=rate_matrix)
-    print(roots[0].write(format_root_node=True, parser=3, props=['date', 'date_CI', 'Country']))
+    #print(roots[0].write(format_root_node=True, parser=3, props=['date', 'date_CI', 'Country']))
     if not work_dir:
         work_dir = get_pastml_work_dir(tree)
     os.makedirs(work_dir, exist_ok=True)
@@ -560,7 +559,7 @@ def pastml_pipeline(tree, data=None, data_sep='\t', id_index=0,
     #print(features)
     
     clear_extra_features(roots, features)
-    nwks = '\n'.join([root.write(format_root_node=True, format=3, features=features) for root in roots])
+    nwks = '\n'.join([roots[0].write(format_root_node=True, parser=3, props=features) for root in roots])
     with open(new_tree, 'w+') as f:
         f.write(nwks)
     try:
@@ -779,7 +778,7 @@ def _validate_input(tree_nwk, columns=None, name_column=None, data=None, data_se
     else:
         c, num_annotated = columns[0], 0
     percentage_unknown = (num_tips - num_annotated) / num_tips
-    print("hey", percentage_unknown)
+    
     if percentage_unknown >= (.9 if not copy_only else 1):
         raise ValueError('{:.1f}% of tip annotations for character "{}" are unknown, '
                          'not enough data to infer ancestral states. '
@@ -811,7 +810,7 @@ def _validate_input(tree_nwk, columns=None, name_column=None, data=None, data_se
         elif 1 == len(root_dates):
             root_dates *= len(roots)
     age_label = DIST_TO_ROOT_LABEL \
-        if (root_dates is None and not next((True for root in roots if getattr(root, DATE, None) is not None), False)) \
+        if (root_dates is None and not next((True for root in roots if root.props.get(DATE, None) is not None), False)) \
         else DATE_LABEL
     annotate_dates(roots, root_dates=root_dates)
     logger.debug('Finished input validation.')
@@ -858,7 +857,7 @@ def _serialize_predicted_states(columns, out_data, roots, dates_are_dates=True):
                 vs = [node.dist, get_formatted_date(node, dates_are_dates)]
                 column2values = {}
                 for column in columns:
-                    value = getattr(node, column, set())
+                    value = node.props.get(column, set())
                     vs.append(value)
                     if value:
                         column2values[column] = sorted(value, reverse=True)

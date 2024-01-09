@@ -111,13 +111,13 @@ def collapse_zero_branches(forest, features_to_be_merged=None):
             if not zero_children:
                 continue
             for feature in features_to_be_merged:
-                feature_intersection = set.intersection(*(getattr(child, feature, set()) for child in zero_children)) \
-                                       & getattr(n, feature, set())
+                feature_intersection = set.intersection(*(child.props.get(feature, set()) for child in zero_children)) \
+                                       & n.props.get(feature, set())
                 if feature_intersection:
                     value = feature_intersection
                 else:
-                    value = set.union(*(getattr(child, feature, set()) for child in zero_children)) \
-                            | getattr(n, feature, set())
+                    value = set.union(*(child.props.get(feature, set()) for child in zero_children)) \
+                            | n.props.get(feature, set())
                 if value:
                     n.add_prop(feature, value)
             for child in zero_children:
@@ -191,19 +191,11 @@ def read_forest(tree_path, columns=None):
 
 def read_tree(tree_path, columns=None):
     tree = None
-    # for f in (3, 2, 5, 0, 1, 4, 6, 7, 8, 9):
-    #     try:
-    #         tree = Tree(tree_path, format=f)
-    #         break
-    #     except:
-    #         continue
-    # if not tree:
-    #     raise ValueError('Could not read the tree {}. Is it a valid newick?'.format(tree_path))
     tree = Tree(tree_path, parser=1)
     if columns:
         for n in tree.traverse():
             for c in columns:
-                vs = set(getattr(n, c).split('|')) if hasattr(n, c) else set()
+                vs = set(n.props.get(c).split('|')) if n.props.get(c) else set()
                 if vs:
                     n.add_prop(c, vs)
     return tree
@@ -220,9 +212,9 @@ def parse_nexus(tree_path, columns=None):
                 dist = float(clade.branch_length)
             except:
                 pass
-            name = getattr(clade, 'name', None)
+            name = clade.props.get('name', None)
             if not name:
-                name = getattr(clade, 'confidence', None)
+                name = clade.props.get('confidence', None)
                 if not isinstance(name, str):
                     name = None
             node = Tree(dist=dist, name=name)
@@ -234,7 +226,7 @@ def parse_nexus(tree_path, columns=None):
             # Parse LSD2 dates and CIs, and PastML columns
             date, ci = None, None
             columns2values = defaultdict(set)
-            comment = getattr(clade, 'comment', None)
+            comment = clade.props.get('comment', None)
             if isinstance(comment, str):
                 date = next(iter(re.findall(DATE_COMMENT_REGEX, comment)), None)
                 ci = next(iter(re.findall(CI_DATE_REGEX_LSD, comment)), None)
@@ -247,12 +239,12 @@ def parse_nexus(tree_path, columns=None):
                                                                               comment)), set())
                         if values:
                             columns2values[column] |= values
-            comment = getattr(clade, 'branch_length', None)
+            comment = clade.props.get('branch_length', None)
             if not ci and not parent and isinstance(comment, str):
                 ci = next(iter(re.findall(CI_DATE_REGEX_LSD, comment)), None)
                 if ci is None:
                     ci = next(iter(re.findall(CI_DATE_REGEX_PASTML, comment)), None)
-            comment = getattr(clade, 'confidence', None)
+            comment = clade.props.get('confidence', None)
             if ci is None and comment is not None and isinstance(comment, str):
                 ci = next(iter(re.findall(CI_DATE_REGEX_LSD, comment)), None)
                 if ci is None:
@@ -274,29 +266,29 @@ def parse_nexus(tree_path, columns=None):
                     node.add_prop(c, vs)
             todo.extend((c, node) for c in clade.clades)
         for n in tree.traverse('preorder'):
-            date, ci = getattr(n, DATE, None), getattr(n, DATE_CI, None)
+            date, ci = n.props.get(DATE, None), n.props.get(DATE_CI, None)
             if date is not None or ci is not None:
                 for c in n.children:
                     if c.dist == 0:
-                        if getattr(c, DATE, None) is None:
+                        if c.props.get(DATE, None) is None:
                             c.add_prop(DATE, date)
-                        if getattr(c, DATE_CI, None) is None:
+                        if c.props.get(DATE_CI, None) is None:
                             c.add_prop(DATE_CI, ci)
         for n in tree.traverse('postorder'):
-            date, ci = getattr(n, DATE, None), getattr(n, DATE_CI, None)
+            date, ci = n.props.get(DATE, None), n.props.get(DATE_CI, None)
             if not n.is_root and n.dist == 0 and (date is not None or ci is not None):
-                if getattr(n.up, DATE, None) is None:
+                if n.up.props.get(DATE, None) is None:
                     n.up.add_prop(DATE, date)
-                if getattr(n.up, DATE_CI, None) is None:
+                if n.up.props.get(DATE_CI, None) is None:
                     n.up.add_prop(DATE_CI, ci)
 
         # propagate dates up to the root if needed
-        if getattr(tree, DATE, None) is None:
-            dated_node = next((n for n in tree.traverse() if getattr(n, DATE, None) is not None), None)
+        if tree.props.get(DATE, None) is None:
+            dated_node = next((n for n in tree.traverse() if n.props.get(DATE, None) is not None), None)
             if dated_node:
                 while dated_node != tree:
-                    if getattr(dated_node.up, DATE, None) is None:
-                        dated_node.up.add_prop(DATE, getattr(dated_node, DATE) - dated_node.dist)
+                    if dated_node.up.props.get(DATE, None) is None:
+                        dated_node.up.add_prop(DATE, dated_node.props.get(DATE) - dated_node.dist)
                     dated_node = dated_node.up
 
         trees.append(tree)
@@ -346,7 +338,7 @@ def resolve_trees(column2states, forest):
     col2state2i = {c: dict(zip(states, range(len(states)))) for (c, states) in column2states.items()}
 
     def get_prediction(n):
-        return '.'.join('-'.join(str(i) for i in sorted([col2state2i[c][_] for _ in getattr(n, c, set())]))
+        return '.'.join('-'.join(str(i) for i in sorted([col2state2i[c][_] for _ in n.props.get(c, set())]))
                         for c in columns)
 
     num_new_nodes = 0
@@ -374,7 +366,7 @@ def resolve_trees(column2states, forest):
 
 def states_are_different(n1, n2, columns):
     for c in columns:
-        if not getattr(n1, c, set()) & getattr(n2, c, set()):
+        if not n1.props.get(c, set()) & n2.props.get(c, set()):
             return True
     return False
 
@@ -388,16 +380,16 @@ def group_children_if_needed(n, children, columns, state):
     dist = child.dist
     pol = n.add_child(dist=dist, name='{}.polytomy_{}'.format(n.name, state))
     pol.add_prop(IS_POLYTOMY, 1)
-    c_date = getattr(child, DATE)
+    c_date = child.props.get(DATE)
     pol.add_prop(DATE, c_date)
-    n_ci = getattr(n, DATE_CI, None)
-    c_ci = getattr(child, DATE_CI, None)
+    n_ci = n.props.get(DATE_CI, None)
+    c_ci = child.props.get(DATE_CI, None)
     pol.add_prop(DATE_CI, (None if not n_ci or not isinstance(n_ci, list)
                               else [n_ci[0],
                                     (c_ci[1] if c_ci and isinstance(c_ci, list) and len(c_ci) > 1
                                      else c_date)]))
     for c in columns:
-        pol.add_prop(c, getattr(child, c))
+        pol.add_prop(c, child.props.get(c))
     for c in children:
         n.remove_child(c)
         pol.add_child(c, dist=c.dist - dist)
@@ -420,7 +412,7 @@ def unresolve_trees(column2states, forest):
     col2state2i = {c: dict(zip(states, range(len(states)))) for (c, states) in column2states.items()}
 
     def get_prediction(n):
-        return '.'.join('-'.join(str(i) for i in sorted([col2state2i[c][_] for _ in getattr(n, c, set())]))
+        return '.'.join('-'.join(str(i) for i in sorted([col2state2i[c][_] for _ in n.props.get(c, set())]))
                         for c in columns)
 
     num_removed_nodes = 0
@@ -436,7 +428,7 @@ def unresolve_trees(column2states, forest):
 
     for tree in forest:
         for n in tree.traverse('postorder'):
-            if getattr(n, IS_POLYTOMY, False):
+            if n.props.get(IS_POLYTOMY, False):
                 num_polytomies += 1
 
                 state2children = defaultdict(list)
@@ -482,13 +474,14 @@ def clear_extra_features(forest, features):
     features = set(features) | {'name', 'dist', 'support'}
     for tree in forest:
         for n in tree.traverse():
-            for f in set(n.features) - features:
+            for f in set(n.props) - features:
                 if f not in features:
                     n.del_prop(f)
 
 
 def copy_forest(forest, features=None):
-    features = set(features if features else forest[0].features)
+    features = set(features if features else forest[0].props)
+    print(features)
     copied_forest = []
     for tree in forest:
         copied_tree = Tree()
@@ -500,8 +493,8 @@ def copy_forest(forest, features=None):
             copied_n.support = n.support
             copied_n.name = n.name
             for f in features:
-                if hasattr(n, f):
-                    copied_n.add_prop(f, getattr(n, f))
+                if f in n.props.keys():
+                    copied_n.add_prop(f, n.props.get(f))
             for c in n.children:
                 todo.append((c, copied_n.add_child()))
     return copied_forest
