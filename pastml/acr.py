@@ -232,9 +232,6 @@ def acr(forest, df=None, columns=None, column2states=None, prediction_method=MPP
     else:
         acr_results = [_work(character) for character in character2settings.keys()]
         
-    #print(acr_results[0])
-    #print(forest[0].write(format_root_node=True, format=3, features=['date', 'date_CI', 'Country']))
-    
     acr_results = flatten_lists(acr_results)
     
     column2states = {acr_result[CHARACTER]: acr_result[STATES] for acr_result in acr_results}
@@ -525,7 +522,6 @@ def pastml_pipeline(tree, data=None, data_sep='\t', id_index=0,
         _validate_input(tree, columns, name_column if html_compressed or html_mixed else None, data, data_sep, id_index,
                         root_date if html_compressed or html or html_mixed or upload_to_itol else None,
                         copy_only=copy_only, parameters=parameters, rates=rate_matrix)
-    #print(roots[0].write(format_root_node=True, parser=3, props=['date', 'date_CI', 'Country']))
     if not work_dir:
         work_dir = get_pastml_work_dir(tree)
     os.makedirs(work_dir, exist_ok=True)
@@ -556,8 +552,7 @@ def pastml_pipeline(tree, data=None, data_sep='\t', id_index=0,
     itol_result = None
     new_tree = os.path.join(work_dir, get_named_tree_file(tree))
     features = [DATE, DATE_CI] + list(column2states.keys())
-    #print(features)
-    
+
     clear_extra_features(roots, features)
     nwks = '\n'.join([roots[0].write(format_root_node=True, parser=3, props=features) for root in roots])
     with open(new_tree, 'w+') as f:

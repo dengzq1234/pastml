@@ -70,8 +70,7 @@ def initialise_parsimonious_states(tree, feature, states):
             node.add_prop(ps_feature_down, all_states)
         else:
             node.add_prop(ps_feature_down, state)
-        node.add_prop(ps_feature, node.props.get(node, ps_feature_down))
-
+        node.add_prop(ps_feature, node.props.get(ps_feature_down))
 
 def get_most_common_states(state_iterable):
     """
@@ -203,6 +202,7 @@ def downpass(tree, feature, states):
             if not node.is_leaf else node.props.get(ps_feature_up)
         preset_states = node.props.get(ps_feature)
         state_intersection = down_up_states & preset_states
+        
         node.add_prop(ps_feature, state_intersection if state_intersection else preset_states)
 
     for node in tree.traverse():

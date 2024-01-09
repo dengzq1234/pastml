@@ -481,7 +481,7 @@ def clear_extra_features(forest, features):
 
 def copy_forest(forest, features=None):
     features = set(features if features else forest[0].props)
-    print(features)
+
     copied_forest = []
     for tree in forest:
         copied_tree = Tree()
