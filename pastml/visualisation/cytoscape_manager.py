@@ -72,10 +72,10 @@ def get_fake_node(n_id, x, y):
 
 
 def get_node(n, n_id, tooltip='', clazz=None, x=0, y=0):
-    features = {feature: getattr(n, feature) for feature in n.features if feature in [MILESTONE, UNRESOLVED, 'x', 'y']
+    features = {feature: n.props.get(feature) for feature in n.props if feature in [MILESTONE, UNRESOLVED, 'x', 'y']
                 or feature.startswith('node_')}
     features[ID] = n_id
-    if n.is_leaf():
+    if n.is_leaf:
         features[TIP] = 1
     features[TOOLTIP] = tooltip
     return _get_node(features, clazz=_clazz_list2css_class(clazz), position=(x, y) if x is not None else None)
@@ -104,8 +104,8 @@ def get_scaling_function(y_m, y_M, x_m, x_M):
 def set_cyto_features_compressed(n, size_scaling, e_size_scaling, font_scaling, transform_size, transform_e_size, state,
                                  root_names, root_dates, suffix='', is_mixed=False):
     tips_inside, tips_below, internal_nodes_inside, roots = \
-        getattr(n, TIPS_INSIDE, []), getattr(n, TIPS_BELOW, []), \
-        getattr(n, INTERNAL_NODES_INSIDE, []), getattr(n, ROOTS, [])
+        n.props.get(TIPS_INSIDE, []), n.props.get(TIPS_BELOW, []), \
+        n.props.get(INTERNAL_NODES_INSIDE, []), n.props.get(ROOTS, [])
 
     def get_min_max_str(values, default_value=0):
         min_v, max_v = (min(len(_) for _ in values), max(len(_) for _ in values)) \
@@ -115,36 +115,36 @@ def set_cyto_features_compressed(n, size_scaling, e_size_scaling, font_scaling, 
     tips_below_str, _, max_n_tips_below = get_min_max_str(tips_below)
     tips_inside_str, _, max_n_tips = get_min_max_str(tips_inside)
     internal_ns_inside_str, _, _ = get_min_max_str(internal_nodes_inside)
-    n.add_feature('{}{}'.format(NODE_NAME, suffix),
+    n.add_prop('{}{}'.format(NODE_NAME, suffix),
                   '{}{}'.format(state, tips_inside_str)
-                  if not is_mixed or (not getattr(n, IN_FOCUS, False) and not getattr(n, UP_FOCUS, False)) else
+                  if not is_mixed or (not n.props.get(n, IN_FOCUS, False) and not n.props.get(UP_FOCUS, False)) else
                   '{}{}{}'.format(state, ':' if state else '', root_names[0]))
-    size_factor = 2 if getattr(n, UNRESOLVED, False) else 1
-    n.add_feature('{}{}'.format(NODE_SIZE, suffix),
+    size_factor = 2 if n.props.get(UNRESOLVED, False) else 1
+    n.add_prop('{}{}'.format(NODE_SIZE, suffix),
                   (size_scaling(transform_size(max_n_tips)) if max_n_tips else int(MIN_NODE_SIZE / 1.5))
                   * size_factor)
-    n.add_feature('{}{}'.format(FONT_SIZE, suffix),
+    n.add_prop('{}{}'.format(FONT_SIZE, suffix),
                   font_scaling(transform_size(max_n_tips)) if max_n_tips else MIN_FONT_SIZE)
 
-    n.add_feature('node_{}{}'.format(TIPS_INSIDE, suffix), tips_inside_str)
-    n.add_feature('node_{}{}'.format(INTERNAL_NODES_INSIDE, suffix), internal_ns_inside_str)
-    n.add_feature('node_{}{}'.format(TIPS_BELOW, suffix), tips_below_str)
+    n.add_prop('node_{}{}'.format(TIPS_INSIDE, suffix), tips_inside_str)
+    n.add_prop('node_{}{}'.format(INTERNAL_NODES_INSIDE, suffix), internal_ns_inside_str)
+    n.add_prop('node_{}{}'.format(TIPS_BELOW, suffix), tips_below_str)
     root_name2date = dict(zip(root_names, root_dates))
     root_names = sorted(root_names)
-    n.add_feature('node_{}{}'.format(ROOTS, suffix), ', '.join(root_names))
-    n.add_feature('node_{}{}'.format(ROOT_DATES, suffix), ', '.join(str(root_name2date[_]) for _ in root_names))
+    n.add_prop('node_{}{}'.format(ROOTS, suffix), ', '.join(root_names))
+    n.add_prop('node_{}{}'.format(ROOT_DATES, suffix), ', '.join(str(root_name2date[_]) for _ in root_names))
 
     edge_size = len(roots)
     if edge_size > 1:
-        n.add_feature('node_meta{}'.format(suffix), 1)
-    n.add_feature('{}{}'.format(EDGE_NAME, suffix), str(edge_size) if edge_size != 1 else '')
+        n.add_prop('node_meta{}'.format(suffix), 1)
+    n.add_prop('{}{}'.format(EDGE_NAME, suffix), str(edge_size) if edge_size != 1 else '')
     e_size = e_size_scaling(transform_e_size(edge_size))
-    n.add_feature('{}{}'.format(EDGE_SIZE, suffix), e_size)
+    n.add_prop('{}{}'.format(EDGE_SIZE, suffix), e_size)
 
 
 def set_cyto_features_tree(n, state):
-    n.add_feature(NODE_NAME, state)
-    n.add_feature(EDGE_NAME, n.dist)
+    n.add_prop(NODE_NAME, state)
+    n.add_prop(EDGE_NAME, n.dist)
 
 
 def _forest2json_compressed(forest, compressed_forest, columns, name_feature, get_date, milestones=None,
@@ -152,11 +152,11 @@ def _forest2json_compressed(forest, compressed_forest, columns, name_feature, ge
     e_size_scaling, font_scaling, size_scaling, transform_e_size, transform_size = \
         get_size_transformations(compressed_forest)
 
-    sort_key = lambda n: (getattr(n, UNRESOLVED, 0),
+    sort_key = lambda n: (n.props.get(UNRESOLVED, 0),
                           get_column_value_str(n, name_feature, format_list=True) if name_feature else '',
                           *(get_column_value_str(n, column, format_list=True) for column in columns),
-                          -getattr(n, NUM_TIPS_INSIDE),
-                          -len(getattr(n, ROOTS)),
+                          -n.props.get(NUM_TIPS_INSIDE),
+                          -len(n.props.get(ROOTS)),
                           n.name)
     i = 0
     node2id = {}
@@ -179,19 +179,19 @@ def _forest2json_compressed(forest, compressed_forest, columns, name_feature, ge
         for n in compressed_tree.traverse():
             state = get_column_value_str(n, name_feature, format_list=False, list_value='') if name_feature else ''
             n2state[n] = state
-            root_names = [_.name for _ in getattr(n, ROOTS)]
-            root_dates = [get_formatted_date(_, dates_are_dates) for _ in getattr(n, ROOTS)]
+            root_names = [_.name for _ in n.props.get(ROOTS)]
+            root_dates = [get_formatted_date(_, dates_are_dates) for _ in n.props.get(ROOTS)]
             set_cyto_features_compressed(n, size_scaling, e_size_scaling, font_scaling,
                                          transform_size, transform_e_size, state, root_names, root_dates,
                                          is_mixed=is_mixed)
 
     # Calculate node coordinates
-    min_size = 2 * min(min(getattr(_, NODE_SIZE) for _ in compressed_tree.traverse())
+    min_size = 2 * min(min(_.props.get(NODE_SIZE) for _ in compressed_tree.traverse())
                        for compressed_tree in compressed_forest)
     n2width = {}
     for compressed_tree in compressed_forest:
         for n in compressed_tree.traverse('postorder'):
-            n2width[n] = max(getattr(n, NODE_SIZE),
+            n2width[n] = max(n.props.get(NODE_SIZE),
                              sum(n2width[c] for c in n.children) + min_size * (len(n.children) - 1))
 
     n2x, n2y = {}, {compressed_tree: 0 for compressed_tree in compressed_forest}
@@ -203,13 +203,13 @@ def _forest2json_compressed(forest, compressed_forest, columns, name_feature, ge
         for n in compressed_tree.traverse('preorder'):
             n2x[n] = n2offset[n] + n2width[n] / 2
             offset = n2offset[n]
-            if not n.is_leaf():
+            if not n.is_leaf:
                 for c in sorted(n.children, key=lambda c: node2id[c]):
                     n2offset[c] = offset
                     offset += n2width[c] + min_size
-                    n2y[c] = n2y[n] + getattr(n, NODE_SIZE) / 2 + getattr(c, NODE_SIZE) / 2 + min_size
+                    n2y[c] = n2y[n] + n.props.get(NODE_SIZE) / 2 + c.props.get(NODE_SIZE) / 2 + min_size
         for n in compressed_tree.traverse('postorder'):
-            if not n.is_leaf():
+            if not n.is_leaf:
                 n2x[n] = np.mean([n2x[c] for c in n.children])
 
     def filter_by_date(items, date):
@@ -225,7 +225,7 @@ def _forest2json_compressed(forest, compressed_forest, columns, name_feature, ge
 
                 # remove too recent nodes from the original tree
                 for n in tree.traverse('postorder'):
-                    if n.is_root():
+                    if n.is_root:
                         continue
                     if get_date(n) > milestone:
                         n.up.remove_child(n)
@@ -233,29 +233,29 @@ def _forest2json_compressed(forest, compressed_forest, columns, name_feature, ge
                 suffix = '_{}'.format(i)
                 for n in nodes:
                     state = n2state[n]
-                    tips_inside, tips_below, internal_nodes_inside, roots = getattr(n, TIPS_INSIDE, []), \
-                                                                            getattr(n, TIPS_BELOW, []), \
-                                                                            getattr(n, INTERNAL_NODES_INSIDE, []), \
-                                                                            getattr(n, ROOTS, [])
+                    tips_inside, tips_below, internal_nodes_inside, roots = n.props.get(TIPS_INSIDE, []), \
+                                                                            n.props.get(TIPS_BELOW, []), \
+                                                                            n.props.get(INTERNAL_NODES_INSIDE, []), \
+                                                                            n.props.get(ROOTS, [])
                     tips_inside_i, tips_below_i, internal_nodes_inside_i, roots_i = [], [], [], []
                     for ti, tb, ini, root in zip(tips_inside, tips_below, internal_nodes_inside, roots):
                         if get_date(root) <= milestone:
                             roots_i.append(root)
 
                             ti = filter_by_date(ti, milestone)
-                            tb = [_ for _ in tb if getattr(_, DATE) <= milestone]
+                            tb = [_ for _ in tb if _.props.get(DATE) <= milestone]
                             ini = filter_by_date(ini, milestone)
 
-                            tips_inside_i.append(ti + [_ for _ in ini if _.is_leaf()])
+                            tips_inside_i.append(ti + [_ for _ in ini if _.is_leaf])
                             tips_below_i.append(tb)
-                            internal_nodes_inside_i.append([_ for _ in ini if not _.is_leaf()])
-                    n.add_features(**{TIPS_INSIDE: tips_inside_i, TIPS_BELOW: tips_below_i,
+                            internal_nodes_inside_i.append([_ for _ in ini if not _.is_leaf])
+                    n.add_props(**{TIPS_INSIDE: tips_inside_i, TIPS_BELOW: tips_below_i,
                                       INTERNAL_NODES_INSIDE: internal_nodes_inside_i, ROOTS: roots_i})
                     if roots_i:
-                        n.add_feature(MILESTONE, i)
-                        root_names = [getattr(_, BRANCH_NAME) if getattr(_, DATE) > milestone else _.name for _ in
+                        n.add_prop(MILESTONE, i)
+                        root_names = [_.props.get(BRANCH_NAME) if _.props.get(DATE) > milestone else _.name for _ in
                                       roots_i]
-                        root_dates = [getattr(_, DATE) for _ in roots_i]
+                        root_dates = [_.props.get(DATE) for _ in roots_i]
                         if dates_are_dates:
                             try:
                                 root_dates = [numeric2datetime(_).strftime("%d %b %Y") for _ in root_dates]
@@ -275,7 +275,7 @@ def _forest2json_compressed(forest, compressed_forest, columns, name_feature, ge
 
     for n, n_id in node2id.items():
         if one_column:
-            values = getattr(n, one_column, set())
+            values = n.props.get(one_column, set())
             clazz = tuple(sorted(values))
         else:
             clazz = tuple('{}_{}'.format(column, get_column_value_str(n, column, format_list=False, list_value=''))
@@ -286,7 +286,7 @@ def _forest2json_compressed(forest, compressed_forest, columns, name_feature, ge
                               clazz=clazz, x=n2x[n], y=n2y[n]))
 
         for child in sorted(n.children, key=lambda _: node2id[_]):
-            edge_attributes = {feature: getattr(child, feature) for feature in child.features
+            edge_attributes = {feature: child.props.get(feature) for feature in child.props
                                if feature.startswith('edge_') or feature == MILESTONE or feature == IS_POLYTOMY}
             source_name = n_id
             edges.append(get_edge(source_name, node2id[child], **edge_attributes))
@@ -308,10 +308,10 @@ def binary_search(start, end, value, array):
 
 def _forest2json(forest, columns, name_feature, get_date, milestones=None, timeline_type=TIMELINE_SAMPLED,
                  dates_are_dates=True):
-    min_root_date = min(getattr(tree, DATE) for tree in forest)
+    min_root_date = min(tree.props.get(DATE) for tree in forest)
     width = sum(len(tree) for tree in forest)
     height_factor = 300 * width / max(
-        (max(getattr(_, DATE) for _ in tree) - min_root_date + tree.dist) for tree in forest)
+        (max(_.props.get(DATE) for _ in tree) - min_root_date + tree.dist) for tree in forest)
     zero_dist = min(min(min(_.dist for _ in tree.traverse() if _.dist > 0) for tree in forest), 300) * height_factor / 2
 
     # Calculate node coordinates
@@ -326,11 +326,11 @@ def _forest2json(forest, columns, name_feature, get_date, milestones=None, timel
     for tree in forest:
         for n in tree.traverse('postorder'):
             state = get_column_value_str(n, name_feature, format_list=False, list_value='') if name_feature else ''
-            n.add_feature('node_root_id', n.name)
-            n.add_feature('node_root_date', get_formatted_date(n, dates_are_dates))
-            if not n.is_leaf():
+            n.add_prop('node_root_id', n.name)
+            n.add_prop('node_root_date', get_formatted_date(n, dates_are_dates))
+            if not n.is_leaf:
                 n2x[n] = np.mean([n2x[_] for _ in n.children])
-            n2y[n] = (getattr(n, DATE) - min_root_date) * height_factor
+            n2y[n] = (n.props.get(DATE) - min_root_date) * height_factor
             for c in n.children:
                 if n2y[c] == n2y[n]:
                     n2y[c] += zero_dist
@@ -340,19 +340,19 @@ def _forest2json(forest, columns, name_feature, get_date, milestones=None, timel
     if len(milestones) > 1:
         for tree in forest:
             for n in tree.traverse('preorder'):
-                ms_i = binary_search(0 if n.is_root() else getattr(n.up, MILESTONE),
+                ms_i = binary_search(0 if n.is_root else n.up.props.get(MILESTONE),
                                      len(milestones), get_date(n), milestones)
-                n.add_feature(MILESTONE, ms_i)
+                n.add_prop(MILESTONE, ms_i)
                 for i in range(len(milestones) - 1, ms_i - 1, -1):
                     milestone = milestones[i]
                     suffix = '_{}'.format(i)
                     if TIMELINE_LTT == timeline_type:
                         # if it is LTT also cut the branches if needed
-                        if getattr(n, DATE) > milestone:
-                            n.add_feature('{}{}'.format(EDGE_NAME, suffix),
-                                          np.round(milestone - getattr(n.up, DATE), 3))
+                        if n.props.get(DATE) > milestone:
+                            n.add_prop('{}{}'.format(EDGE_NAME, suffix),
+                                          np.round(milestone - n.up.props.get(DATE), 3))
                         else:
-                            n.add_feature('{}{}'.format(EDGE_NAME, suffix), np.round(n.dist, 3))
+                            n.add_prop('{}{}'.format(EDGE_NAME, suffix), np.round(n.dist, 3))
 
     # Save the structure
     clazzes = set()
@@ -368,13 +368,13 @@ def _forest2json(forest, columns, name_feature, get_date, milestones=None, timel
             i += 1
 
     for n, n_id in node2id.items():
-        if n.is_root():
+        if n.is_root:
             fake_id = 'fake_node_{}'.format(n_id)
             nodes.append(get_fake_node(fake_id, n2x[n], n2y[n] - n.dist * height_factor))
-            edges.append(get_edge(fake_id, n_id, **{feature: getattr(n, feature) for feature in n.features
+            edges.append(get_edge(fake_id, n_id, **{feature: n.props.get(feature) for feature in n.props
                                                     if feature.startswith('edge_') or feature == MILESTONE}))
         if one_column:
-            values = getattr(n, one_column, set())
+            values = n.props.get(one_column, set())
             clazz = tuple(sorted(values))
         else:
             clazz = tuple('{}_{}'.format(column, get_column_value_str(n, column, format_list=False, list_value=''))
@@ -384,7 +384,7 @@ def _forest2json(forest, columns, name_feature, get_date, milestones=None, timel
         nodes.append(get_node(n, n_id, tooltip=get_tooltip(n, columns), clazz=clazz, x=n2x[n], y=n2y[n]))
 
         for child in n.children:
-            edge_attributes = {feature: getattr(child, feature) for feature in child.features
+            edge_attributes = {feature: child.props.get(feature) for feature in child.props
                                if feature.startswith('edge_') or feature == MILESTONE or feature == IS_POLYTOMY}
             source_name = n_id
             target_name = 'fake_node_{}'.format(node2id[child])
@@ -487,10 +487,10 @@ def get_size_transformations(forest):
     max_size, min_size, max_e_size, min_e_size = 1, np.inf, 1, np.inf
     for tree in forest:
         for n in tree.traverse():
-            sz = max(getattr(n, NUM_TIPS_INSIDE), 1)
+            sz = max(n.props.get(NUM_TIPS_INSIDE), 1)
             max_size = max(max_size, sz)
             min_size = min(min_size, sz)
-            e_sz = len(getattr(n, ROOTS))
+            e_sz = len(n.props.get(ROOTS))
             max_e_size = max(max_e_size, e_sz)
             min_e_size = min(min_e_size, e_sz)
 
@@ -679,7 +679,7 @@ def _get_edge(**data):
 
 
 def get_column_value_str(n, column, format_list=True, list_value=''):
-    values = getattr(n, column, set())
+    values = n.props.get(column, set())
     if isinstance(values, str):
         return values
     return ' or '.join(sorted(values)) if format_list or len(values) == 1 else list_value
@@ -692,16 +692,16 @@ def visualize(forest, column2states, work_dir, name_column=None, html=None, html
         nodes_in_focus = set()
         for node in tree.traverse():
             for column in column2states.keys():
-                col_state = getattr(node, column, set())
+                col_state = node.props.get(column, set())
                 if focus and col_state & focus[column]:
                     nodes_in_focus.add(node)
         for node in nodes_in_focus:
-            node.add_feature(IN_FOCUS, True)
-            if not node.is_root() and node.up not in nodes_in_focus:
-                node.up.add_feature(UP_FOCUS, True)
+            node.add_prop(IN_FOCUS, True)
+            if not node.is_root and node.up not in nodes_in_focus:
+                node.up.add_prop(UP_FOCUS, True)
             for c in node.children:
                 if c not in nodes_in_focus:
-                    c.add_feature(AROUND_FOCUS, True)
+                    c.add_prop(AROUND_FOCUS, True)
 
     one_column = next(iter(column2states.keys())) if len(column2states) == 1 else None
 
@@ -725,9 +725,9 @@ def visualize(forest, column2states, work_dir, name_column=None, html=None, html
         if column == name_column:
             for tree in forest:
                 for n in tree.traverse():
-                    sts = getattr(n, column, set())
-                    if len(sts) == 1 and not n.is_root() and getattr(n.up, column, set()) == sts:
-                        n.add_feature('edge_color', state2color[next(iter(sts))])
+                    sts = n.props.get(column, set())
+                    if len(sts) == 1 and not n.is_root and n.up.props.get(column, set()) == sts:
+                        n.add_prop('edge_color', state2color[next(iter(sts))])
         out_colour_file = os.path.join(work_dir, get_pastml_colour_file(column))
         # Not using DataFrames to speed up document writing
         with open(out_colour_file, 'w+') as f:
@@ -739,33 +739,33 @@ def visualize(forest, column2states, work_dir, name_column=None, html=None, html
                                           .format(column, states, colours, out_colour_file))
     for tree in forest:
         for node in tree.traverse():
-            if node.is_leaf():
-                node.add_feature(IS_TIP, True)
-            node.add_feature(BRANCH_NAME, '{}-{}'.format(node.up.name if not node.is_root() else '', node.name))
+            if node.is_leaf:
+                node.add_prop(IS_TIP, True)
+            node.add_prop(BRANCH_NAME, '{}-{}'.format(node.up.name if not node.is_root else '', node.name))
             for column in column2states.keys():
-                col_state = getattr(node, column, set())
+                col_state = node.props.get(column, set())
                 if len(col_state) != 1:
-                    node.add_feature(UNRESOLVED, 1)
+                    node.add_prop(UNRESOLVED, 1)
                     break
 
     if TIMELINE_NODES == timeline_type:
         def get_date(node):
-            return getattr(node, DATE)
+            return node.props.get(DATE)
     elif TIMELINE_SAMPLED == timeline_type:
-        max_date = max(max(getattr(_, DATE) for _ in tree) for tree in forest)
+        max_date = max(max(_.props.get(DATE) for _ in tree) for tree in forest)
 
         def get_date(node):
-            tips = [_ for _ in node if getattr(_, IS_TIP, False)]
-            return min(getattr(_, DATE) for _ in tips) if tips else max_date
+            tips = [_ for _ in node if _.props.get(IS_TIP, False)]
+            return min(_.props.get(DATE) for _ in tips) if tips else max_date
     elif TIMELINE_LTT == timeline_type:
         def get_date(node):
-            return getattr(node, DATE) if node.is_root() else (getattr(node.up, DATE) + 1e-6)
+            return node.props.get(DATE) if node.is_root else (node.up.props.get(DATE) + 1e-6)
     else:
         raise ValueError('Unknown timeline type: {}. Allowed ones are {}, {} and {}.'
                          .format(timeline_type, TIMELINE_NODES, TIMELINE_SAMPLED, TIMELINE_LTT))
     dates = []
     for tree in forest:
-        dates.extend([getattr(_, DATE) for _ in (tree.traverse()
+        dates.extend([_.props.get(DATE) for _ in (tree.traverse()
                                                  if timeline_type in [TIMELINE_LTT, TIMELINE_NODES] else tree)])
     dates = sorted(dates)
     milestones = sorted({dates[0], dates[len(dates) // 8], dates[len(dates) // 4], dates[3 * len(dates) // 8],
@@ -835,8 +835,8 @@ def update_milestones(forest, date_label, milestone_labels, milestones, timeline
     first_date, last_date = np.inf, -np.inf
     for tree in forest:
         for _ in (tree.traverse() if timeline_type in [TIMELINE_LTT, TIMELINE_NODES] else tree):
-            first_date = min(first_date, getattr(_, DATE))
-            last_date = max(last_date, getattr(_, DATE))
+            first_date = min(first_date, _.props.get(DATE))
+            last_date = max(last_date, _.props.get(DATE))
     milestones = [ms for ms in milestones if first_date <= ms <= last_date]
     if milestones[0] > first_date:
         milestones.insert(0, first_date)

@@ -3,7 +3,7 @@ from pastml.tree import DATE, DATE_CI
 
 
 def get_formatted_date(node, dates_are_dates):
-    date, ci = getattr(node, DATE), getattr(node, DATE_CI, None)
+    date, ci = node.props.get(DATE), node.props.get(DATE_CI, None)
     if dates_are_dates:
         try:
             date = numeric2datetime(date).strftime("%d %b %Y")

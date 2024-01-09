@@ -37,17 +37,17 @@ def _tree2pajek_vertices_arcs(compressed_tree, nodes, edges, columns):
     def get_states(n, columns):
         res = []
         for column in columns:
-            values = getattr(n, column, set())
+            values = n.props.get(column, set())
             value = values if isinstance(values, str) else ' or '.join(sorted(values))
             res.append('{}:{}'.format(column, value))
         return res
 
     for id, n in enumerate(compressed_tree.traverse('preorder'), start=len(nodes) + 1):
         n2id[n] = id
-        if not n.is_root():
-            edges.append('{} {} {}'.format(n2id[n.up], id, len(getattr(n, ROOTS))))
+        if not n.is_root:
+            edges.append('{} {} {}'.format(n2id[n.up], id, len(n.props.get(ROOTS))))
         nodes.append('{} "{}" "{}" {}'.format(id, n.name,
-                                              (';'.join(','.join(_.name for _ in ti) for ti in getattr(n, TIPS_INSIDE))),
+                                              (';'.join(','.join(_.name for _ in ti) for ti in n.props.get(TIPS_INSIDE))),
                                               ' '.join('"{}"'.format(_) for _ in get_states(n, columns))))
 
 
@@ -82,27 +82,27 @@ def save_to_pajek(nodes, edges, pajek):
 
 def compress_tree(tree, columns, can_merge_diff_sizes=True, tip_size_threshold=REASONABLE_NUMBER_OF_TIPS, mixed=False,
                   pajek=None, pajek_timing=VERTICAL):
-    compressed_tree = copy_forest([tree], features=columns | set(tree.features))[0]
+    compressed_tree = copy_forest([tree], features=columns | set(tree.props))[0]
 
     for n_compressed, n in zip(compressed_tree.traverse('postorder'), tree.traverse('postorder')):
-        n_compressed.add_feature(TIPS_BELOW, [list(n_compressed.iter_leaves())])
-        n_compressed.add_feature(TIPS_INSIDE, [])
-        n_compressed.add_feature(INTERNAL_NODES_INSIDE, [])
-        n_compressed.add_feature(ROOTS, [n])
-        if n_compressed.is_leaf():
-            getattr(n_compressed, TIPS_INSIDE).append(n)
-        elif not getattr(n_compressed, IS_POLYTOMY, False):
-            getattr(n_compressed, INTERNAL_NODES_INSIDE).append(n)
-        n.add_feature(COMPRESSED_NODE, n_compressed)
+        n_compressed.add_prop(TIPS_BELOW, [list(n_compressed.leaves())])
+        n_compressed.add_prop(TIPS_INSIDE, [])
+        n_compressed.add_prop(INTERNAL_NODES_INSIDE, [])
+        n_compressed.add_prop(ROOTS, [n])
+        if n_compressed.is_leaf:
+            n_compressed.props.get(TIPS_INSIDE).append(n)
+        elif not  n_compressed.props.get(IS_POLYTOMY, False):
+             n_compressed.props.get(INTERNAL_NODES_INSIDE).append(n)
+        n.add_prop(COMPRESSED_NODE, n_compressed)
 
     collapse_vertically(compressed_tree, columns, mixed=mixed)
     if pajek is not None and VERTICAL == pajek_timing:
         _tree2pajek_vertices_arcs(compressed_tree, *pajek, columns=sorted(columns))
 
     for n in compressed_tree.traverse():
-        n.add_feature(NUM_TIPS_INSIDE, len(getattr(n, TIPS_INSIDE)))
-        n.add_feature(TIPS_INSIDE, [getattr(n, TIPS_INSIDE)])
-        n.add_feature(INTERNAL_NODES_INSIDE, [getattr(n, INTERNAL_NODES_INSIDE)])
+        n.add_prop(NUM_TIPS_INSIDE, len(n.props.get(TIPS_INSIDE)))
+        n.add_prop(TIPS_INSIDE, [n.props.get(TIPS_INSIDE)])
+        n.add_prop(INTERNAL_NODES_INSIDE, [n.props.get(INTERNAL_NODES_INSIDE)])
 
     get_bin = lambda _: _
     collapse_horizontally(compressed_tree, columns, get_bin, mixed=mixed)
@@ -117,13 +117,13 @@ def compress_tree(tree, columns, can_merge_diff_sizes=True, tip_size_threshold=R
 
     if len(compressed_tree) > tip_size_threshold:
         for n in compressed_tree.traverse('preorder'):
-            multiplier = (getattr(n.up, 'multiplier') if n.up else 1) * len(getattr(n, ROOTS))
-            n.add_feature('multiplier', multiplier)
+            multiplier = (n.up.props.get('multiplier') if n.up else 1) * len(n.props.get(ROOTS))
+            n.add_prop('multiplier', multiplier)
 
         def get_tsize(n):
-            if getattr(n, IN_FOCUS, False) or getattr(n, AROUND_FOCUS, False) or getattr(n, UP_FOCUS, False):
+            if n.props.get(IN_FOCUS, False) or n.props.get(AROUND_FOCUS, False) or n.props.get(UP_FOCUS, False):
                 return np.inf
-            return getattr(n, NUM_TIPS_INSIDE) * getattr(n, 'multiplier')
+            return n.props.get(NUM_TIPS_INSIDE) * n.props.get('multiplier')
 
         node_thresholds = []
         for n in compressed_tree.traverse('postorder'):
@@ -131,7 +131,7 @@ def compress_tree(tree, columns, can_merge_diff_sizes=True, tip_size_threshold=R
             bs = get_tsize(n)
             # if bs > children_bs it means that the trimming threshold for the node is higher
             # than the ones for its children
-            if not n.is_root() and bs > children_bs:
+            if not n.is_root and bs > children_bs:
                 node_thresholds.append(bs)
         threshold = sorted(node_thresholds)[-tip_size_threshold]
 
@@ -168,9 +168,9 @@ def collapse_horizontally(tree, columns, tips2bin, mixed=False):
         if n.name not in config_cache:
             # Configuration is (branch_width, (size, states, child_configurations)),
             # where branch_width is only used for recursive calls and is ignored when considering a merge
-            config_cache[n.name] = (len(getattr(n, TIPS_INSIDE)),
-                               (tips2bin(getattr(n, NUM_TIPS_INSIDE)),
-                                tuple(tuple(sorted(getattr(n, column, set()))) for column in columns),
+            config_cache[n.name] = (len(n.props.get(TIPS_INSIDE)),
+                               (tips2bin(n.props.get(NUM_TIPS_INSIDE)),
+                                tuple(tuple(sorted(n.props.get(column, set()))) for column in columns),
                                 tuple(sorted([get_configuration(_) for _ in n.children]))))
         return config_cache[n.name]
 
@@ -180,7 +180,7 @@ def collapse_horizontally(tree, columns, tips2bin, mixed=False):
     for n in tree.traverse('postorder'):
         config2children = defaultdict(list)
         for _ in n.children:
-            if mixed and (getattr(_, IN_FOCUS, False) or _.name in uncompressable_ids):
+            if mixed and (_.props.get(IN_FOCUS, False) or _.name in uncompressable_ids):
                 uncompressable_ids.add(_.name)
                 uncompressable_ids.add(n.name)
             else:
@@ -190,22 +190,22 @@ def collapse_horizontally(tree, columns, tips2bin, mixed=False):
             collapsed_configurations += 1
             child = children[0]
             for sibling in children[1:]:
-                getattr(child, TIPS_INSIDE).extend(getattr(sibling, TIPS_INSIDE))
-                for ti in getattr(sibling, TIPS_INSIDE):
+                child.props.get(TIPS_INSIDE).extend(sibling.props.get(TIPS_INSIDE))
+                for ti in sibling.props.get(TIPS_INSIDE):
                     for _ in ti:
-                        _.add_feature(COMPRESSED_NODE, child)
-                getattr(child, INTERNAL_NODES_INSIDE).extend(getattr(sibling, INTERNAL_NODES_INSIDE))
-                for ii in getattr(sibling, INTERNAL_NODES_INSIDE):
+                        _.add_prop(COMPRESSED_NODE, child)
+                child.props.get(INTERNAL_NODES_INSIDE).extend(sibling.props.get(INTERNAL_NODES_INSIDE))
+                for ii in sibling.props.get(INTERNAL_NODES_INSIDE):
                     for _ in ii:
-                        _.add_feature(COMPRESSED_NODE, child)
-                getattr(child, ROOTS).extend(getattr(sibling, ROOTS))
-                getattr(child, TIPS_BELOW).extend(getattr(sibling, TIPS_BELOW))
+                        _.add_prop(COMPRESSED_NODE, child)
+                child.props.get(ROOTS).extend(sibling.props.get(ROOTS))
+                child.props.get(TIPS_BELOW).extend(sibling.props.get(TIPS_BELOW))
                 n.remove_child(sibling)
-            child.add_feature(METACHILD, True)
-            child.add_feature(NUM_TIPS_INSIDE,
-                              sum(len(_) for _ in getattr(child, TIPS_INSIDE)) / len(getattr(child, TIPS_INSIDE)))
+            child.add_prop(METACHILD, True)
+            child.add_prop(NUM_TIPS_INSIDE,
+                              sum(len(_) for _ in child.props.get(TIPS_INSIDE)) / len(child.props.get(TIPS_INSIDE)))
             if child.name in config_cache:
-                config_cache[child.name] = (len(getattr(child, TIPS_INSIDE)), config_cache[child.name][1])
+                config_cache[child.name] = (len(child.props.get(TIPS_INSIDE)), config_cache[child.name][1])
     if collapsed_configurations:
         logging.getLogger('pastml').debug(
             'Collapsed {} sets of equivalent configurations horizontally.'.format(collapsed_configurations))
@@ -222,10 +222,10 @@ def remove_small_tips(compressed_tree, full_tree, to_be_removed):
                 num_removed += 1
                 parent.remove_child(l)
                 # remove the corresponding nodes from the non-collapsed tree
-                for ti in getattr(l, TIPS_INSIDE):
+                for ti in l.props.get(TIPS_INSIDE):
                     for _ in ti:
                         _.up.remove_child(_)
-                for ii in getattr(l, INTERNAL_NODES_INSIDE):
+                for ii in l.props.get(INTERNAL_NODES_INSIDE):
                     for _ in ii:
                         _.up.remove_child(_)
                 changed = True
@@ -235,12 +235,12 @@ def remove_small_tips(compressed_tree, full_tree, to_be_removed):
     todo = list(full_tree)
     while todo:
         t = todo.pop()
-        if not getattr(t, IS_TIP, False):
+        if not t.props.get(IS_TIP, False):
             parent = t.up
             t.up.remove_child(t)
-            if parent.is_leaf():
+            if parent.is_leaf:
                 todo.append(parent)
-            for ini_list in getattr(getattr(t, COMPRESSED_NODE), INTERNAL_NODES_INSIDE):
+            for ini_list in t.props.get(COMPRESSED_NODE).props.get(INTERNAL_NODES_INSIDE):
                 if t in ini_list:
                     ini_list.remove(t)
 
@@ -259,34 +259,34 @@ def collapse_vertically(tree, columns, mixed=False):
 
     def _same_states(node1, node2, columns):
         for column in columns:
-            if getattr(node1, column, set()) != getattr(node2, column, set()):
+            if node1.props.get(column, set()) != node2.props.get(column, set()):
                 return False
         if mixed:
-            if getattr(node1, IN_FOCUS, False) or getattr(node2, IN_FOCUS, False):
+            if node1.props.get(IN_FOCUS, False) or node2.props.get(IN_FOCUS, False):
                 return False
-            if getattr(node1, UP_FOCUS, False) and not getattr(node2, IN_FOCUS, False) and not getattr(node2, UP_FOCUS, False):
-                node2.add_feature(AROUND_FOCUS, True)
+            if node1.props.get(UP_FOCUS, False) and not node2.props.get(IN_FOCUS, False) and not node2.props.get(UP_FOCUS, False):
+                node2.add_prop(AROUND_FOCUS, True)
                 return False
-            if getattr(node2, UP_FOCUS, False) and not getattr(node1, IN_FOCUS, False) and not getattr(node1, UP_FOCUS, False):
-                node1.add_feature(AROUND_FOCUS, True)
+            if node2.props.get(UP_FOCUS, False) and not node1.props.get(IN_FOCUS, False) and not node1.props.get(UP_FOCUS, False):
+                node1.add_prop(AROUND_FOCUS, True)
                 return False
         return True
 
     num_collapsed = 0
     for n in tree.traverse('postorder'):
-        if n.is_leaf():
+        if n.is_leaf:
             continue
 
         children = list(n.children)
         for child in children:
             # merge the child into this node if their states are the same
             if _same_states(n, child, columns):
-                getattr(n, TIPS_INSIDE).extend(getattr(child, TIPS_INSIDE))
-                for _ in getattr(child, TIPS_INSIDE):
-                    _.add_feature(COMPRESSED_NODE, n)
-                getattr(n, INTERNAL_NODES_INSIDE).extend(getattr(child, INTERNAL_NODES_INSIDE))
-                for _ in getattr(child, INTERNAL_NODES_INSIDE):
-                    _.add_feature(COMPRESSED_NODE, n)
+                n.props.get(TIPS_INSIDE).extend(child.props.get(TIPS_INSIDE))
+                for _ in child.props.get(TIPS_INSIDE):
+                    _.add_prop(COMPRESSED_NODE, n)
+                n.props.get(INTERNAL_NODES_INSIDE).extend(child.props.get(INTERNAL_NODES_INSIDE))
+                for _ in child.props.get(INTERNAL_NODES_INSIDE):
+                    _.add_prop(COMPRESSED_NODE, n)
 
                 n.remove_child(child)
                 grandchildren = list(child.children)
@@ -307,8 +307,8 @@ def remove_mediators(tree, columns):
     """
     num_removed = 0
     for n in tree.traverse('postorder'):
-        if getattr(n, METACHILD, False) or n.is_leaf() or len(n.children) > 1 or n.is_root() \
-                or getattr(n, NUM_TIPS_INSIDE) > 0:
+        if n.props.get(METACHILD, False) or n.is_leaf or len(n.children) > 1 or n.is_root \
+                or n.props.get(NUM_TIPS_INSIDE) > 0:
             continue
 
         parent = n.up
@@ -316,9 +316,9 @@ def remove_mediators(tree, columns):
 
         compatible = True
         for column in columns:
-            states = getattr(n, column, set())
-            parent_states = getattr(parent, column, set())
-            child_states = getattr(child, column, set())
+            states = n.props.get(column, set())
+            parent_states = parent.props.get(column, set())
+            child_states = child.props.get(column, set())
             # if mediator has unresolved states, it should hesitate between the parent and the child:
             if len(states) < 2 or states != child_states | parent_states:
                 compatible = False
@@ -328,7 +328,7 @@ def remove_mediators(tree, columns):
             parent.remove_child(n)
             parent.add_child(child)
             # update the uncompressed tree
-            for ii in getattr(n, INTERNAL_NODES_INSIDE):
+            for ii in n.props.get(INTERNAL_NODES_INSIDE):
                 for _ in ii:
                     for c in list(_.children):
                         _.up.add_child(c)
