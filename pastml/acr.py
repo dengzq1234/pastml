@@ -144,7 +144,7 @@ def acr(forest, df=None, columns=None, column2states=None, prediction_method=MPP
     prediction_methods = value2list(len(columns), prediction_method, MPPA)
     
     models = value2list(len(columns), model, F81)
-    
+
     def get_states(method, model, column):
         initial_states = column2states[column]
         if not is_ml(method) or model not in {HKY, JTT}:
@@ -281,25 +281,49 @@ def acr(forest, df=None, columns=None, column2states=None, prediction_method=MPP
     return acr_results
 
 
+# def calculate_observed_freqs(character, forest, states):
+#     n = len(states)
+#     missing_data = 0.
+#     state2index = dict(zip(states, range(n)))
+#     observed_frequencies = np.zeros(n, np.float64)
+#     for tree in forest:
+#         for _ in tree:
+#             state = _.props.get(character, set())
+#             if state:
+#                 num_node_states = len(state)
+#                 for _ in state:
+#                     observed_frequencies[state2index[_]] += 1. / num_node_states
+#             else:
+#                 missing_data += 1
+#     total_count = observed_frequencies.sum() + missing_data
+#     observed_frequencies /= observed_frequencies.sum()
+#     missing_data /= total_count
+#     return missing_data, observed_frequencies, state2index
+
 def calculate_observed_freqs(character, forest, states):
     n = len(states)
     missing_data = 0.
     state2index = dict(zip(states, range(n)))
     observed_frequencies = np.zeros(n, np.float64)
     for tree in forest:
-        for _ in tree:
-            state = _.props.get(character, set())
+        for node in tree:
+            state = node.props.get(character, set())
+
+            # Check if state is a string and convert it to a set
+            if isinstance(state, str):
+                state = {state}
+            
             if state:
                 num_node_states = len(state)
-                for _ in state:
-                    observed_frequencies[state2index[_]] += 1. / num_node_states
+                for st in state:
+                    observed_frequencies[state2index[st]] += 1. / num_node_states
             else:
                 missing_data += 1
+
     total_count = observed_frequencies.sum() + missing_data
     observed_frequencies /= observed_frequencies.sum()
     missing_data /= total_count
     return missing_data, observed_frequencies, state2index
-
 
 def flatten_lists(lists):
     result = []
@@ -536,7 +560,6 @@ def pastml_pipeline(tree, data=None, data_sep='\t', id_index=0,
                       resolve_polytomies=resolve_polytomies, frequency_smoothing=frequency_smoothing)
     
     column2states = {acr_result[CHARACTER]: acr_result[STATES] for acr_result in acr_results}
-    
     if not out_data:
         out_data = os.path.join(work_dir, get_combined_ancestral_state_file())
 

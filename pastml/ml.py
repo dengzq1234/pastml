@@ -107,6 +107,7 @@ def get_bottom_up_loglikelihood(tree, character, model, is_marginal=True, alter=
     allowed_state_feature = get_personalized_feature_name(character, ALLOWED_STATES)
 
     get_pij = model.get_Pij_t
+    
     for node in tree.traverse('postorder'):
         calc_node_bu_likelihood(node, allowed_state_feature, lh_feature, lh_sf_feature, lh_joint_state_feature,
                                 is_marginal, get_pij)
@@ -311,6 +312,10 @@ def initialize_allowed_states(tree, feature, states):
 
     for node in tree.traverse():
         node_states = node.props.get(feature, set())
+        # Check if state is a string and convert it to a set
+        if isinstance(node_states, str):
+            node_states = {node_states}
+
         if not node_states:
             allowed_states = np.ones(n, dtype=int)
         else:
@@ -318,7 +323,6 @@ def initialize_allowed_states(tree, feature, states):
             for state in node_states:
                 allowed_states[state2index[state]] = 1
         node.add_prop(allowed_states_feature, allowed_states)
-
 
 def get_zero_clusters_with_states(tree, feature):
     """
