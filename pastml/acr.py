@@ -135,7 +135,6 @@ def acr(forest, df=None, columns=None, column2states=None, prediction_method=MPP
         preannotate_forest(forest, df=df)
 
     forest_stats = ForestStats(forest)
-
     logging.getLogger('pastml').debug('\n=============ACR===============================')
 
     column2parameters = column2parameters if column2parameters else {}
@@ -158,7 +157,7 @@ def acr(forest, df=None, columns=None, column2states=None, prediction_method=MPP
         for root in forest:
             for n in root.traverse():
                 if column in n.props.keys():
-                    n.add_feature(column, state_set & n.props.get(column))
+                    n.add_prop(column, state_set & n.props.get(column))
         return states
 
     # If we gonna resolve polytomies we might need to get back to the initial states so let's memorise them
@@ -245,11 +244,11 @@ def acr(forest, df=None, columns=None, column2states=None, prediction_method=MPP
                 c2states = n2c2states[n]
                 for c in columns:
                     if c in c2states:
-                        n.add_feature(c, c2states[c])
+                        n.add_prop(c, c2states[c])
                     # if it is a copy method we just need to keep the polytomy state
                     # as there is no way to calculate a state
                     elif not n.props.get(IS_POLYTOMY, False) or not column2copy[c]:
-                        n.del_feature(c)
+                        n.del_prop(c)
 
         forest_stats = ForestStats(forest)
         for acr_res in acr_results:
@@ -308,7 +307,6 @@ def calculate_observed_freqs(character, forest, states):
     for tree in forest:
         for node in tree:
             state = node.props.get(character, set())
-
             # Check if state is a string and convert it to a set
             if isinstance(state, str):
                 state = {state}
