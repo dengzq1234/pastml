@@ -66,6 +66,8 @@ def initialise_parsimonious_states(tree, feature, states):
 
     for node in tree.traverse():
         state = node.props.get(feature, set())
+        if isinstance(state, str):
+            state = {state}
         if not state:
             node.add_prop(ps_feature_down, all_states)
         else:
@@ -201,6 +203,7 @@ def downpass(tree, feature, states):
                                                 + [child.props.get(ps_feature_down) for child in node.children]) \
             if not node.is_leaf else node.props.get(ps_feature_up)
         preset_states = node.props.get(ps_feature)
+
         state_intersection = down_up_states & preset_states
         
         node.add_prop(ps_feature, state_intersection if state_intersection else preset_states)
