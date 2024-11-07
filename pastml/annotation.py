@@ -19,7 +19,7 @@ def get_min_forest_stats(forest):
 
             len_sum += node.dist
 
-            if node.is_leaf():
+            if node.is_leaf:
                 num_tips += 1
 
     avg_len = len_sum / (num_nodes - num_zero_nodes)
